@@ -32,6 +32,8 @@ python3 -m http.server 8765 --directory site
 
 All assets use relative paths and routes use `#/…`, so GitHub Pages project paths and deep links work without server rewrites. The workflow checks the content and utility behavior before deploying only `site/` to Pages. Configure the repository's Pages source as **GitHub Actions**.
 
+The 16 automated checks include regression coverage for older-browser query handling, recovery of unreadable saved data, cross-tab state updates, and preservation of the original 19-image crosswalk. Browser QA separately exercised 320px and 390px phone layouts, landscape and desktop layouts, deep links, keyboard filters, favorites/checklist persistence, backup import/export, two tabs, blocked clipboard/storage, and failed image/module downloads. All 19 close-ups and the overview loaded on the public Pages origin. These were Chrome viewport tests, not tests on physical iOS/Android devices.
+
 The independent Xbox sequence fixture is transcribed from source material, not produced from the app's PlayStation data. Tests check all 30 published controller sequences, phone mnemonic consistency, source-error regressions, hash routing, search, backup validation, and blocked/corrupt/quota-limited storage. A mnemonic consistency test catches transcription errors; it cannot prove in-game activation.
 
 ## Privacy and licenses

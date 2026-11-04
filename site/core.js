@@ -1,4 +1,5 @@
 export const STORAGE_KEY = "glovebox.gta-v-ps5.v1";
+export const RECOVERY_KEY = STORAGE_KEY + ".unreadable";
 export const categories = [
   "quick",
   "all",
@@ -46,7 +47,8 @@ export function routeURL(view, params = {}) {
   const search = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== "" && v != null),
   );
-  return `#/${view}${search.size ? "?" + search : ""}`;
+  const query = search.toString();
+  return `#/${view}${query ? "?" + query : ""}`;
 }
 export const normalize = (text) =>
   String(text)
@@ -114,22 +116,47 @@ export function sanitizeState(value, cheatIds, storeIds) {
 export function createStorage(getStorage, cheatIds, storeIds) {
   let state = { version: 1, favorites: [], stores: [], method: "phone" },
     storage = null,
-    warning = "";
+    warning = "",
+    recovery = "",
+    raw = null;
   try {
     storage = getStorage();
     if (!storage) throw new Error("Storage unavailable");
-    const raw = storage.getItem(STORAGE_KEY);
-    if (raw) {
+    raw = storage.getItem(STORAGE_KEY);
+    recovery = storage.getItem(RECOVERY_KEY) || "";
+  } catch {
+    storage = null;
+    warning =
+      "Browser storage is unavailable. Changes last only until this page closes. Export a backup to keep them.";
+  }
+  if (raw) {
+    try {
       const clean = sanitizeState(JSON.parse(raw), cheatIds, storeIds);
       state = clean.state;
       if (clean.dropped)
         warning = `${clean.dropped} unknown or duplicate saved items were removed.`;
+    } catch {
+      recovery = raw;
+      // Preserve unreadable data before replacing it, including a newer schema.
+      try {
+        storage.setItem(RECOVERY_KEY, raw);
+        warning =
+          "Previous saved data could not be read. A recovery copy is available in Saved. New selections can be saved normally.";
+      } catch {
+        storage = null;
+        warning =
+          "Previous saved data could not be read or backed up. The original is untouched; new selections stay in memory. Export them before closing.";
+      }
     }
-    storage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (error) {
-    storage = null;
-    warning =
-      "Browser storage is unavailable or saved data is unreadable. Changes last only until this page closes. Export a backup to keep them.";
+  }
+  if (storage) {
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      storage = null;
+      warning =
+        "Your browser cannot save changes. Selections stay in memory; export a backup before closing.";
+    }
   }
   return {
     get state() {
@@ -137,6 +164,35 @@ export function createStorage(getStorage, cheatIds, storeIds) {
     },
     get warning() {
       return warning;
+    },
+    get recovery() {
+      return recovery;
+    },
+    receive(raw) {
+      if (!storage) return false;
+      try {
+        const clean =
+          raw === null
+            ? {
+                state: {
+                  version: 1,
+                  favorites: [],
+                  stores: [],
+                  method: "phone",
+                },
+                dropped: 0,
+              }
+            : sanitizeState(JSON.parse(raw), cheatIds, storeIds);
+        state = clean.state;
+        warning = clean.dropped
+          ? `${clean.dropped} unknown or duplicate saved items were ignored.`
+          : "";
+        return true;
+      } catch {
+        warning =
+          "Another tab wrote unreadable saved data. Your current selections are still here; export a backup before reloading.";
+        return false;
+      }
     },
     save(next) {
       state = sanitizeState(next, cheatIds, storeIds).state;

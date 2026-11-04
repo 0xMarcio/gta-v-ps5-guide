@@ -8,6 +8,7 @@ import {
   chooseMethod,
   createStorage,
   sanitizeState,
+  STORAGE_KEY,
 } from "./core.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -75,6 +76,18 @@ let storeListRoute = {
   region: "all",
 };
 let noticeTimer, announceTimer;
+const listPositions = new Map();
+function listKey(r) {
+  if (r.view === "cheats")
+    return routeURL("cheats", { c: r.category || "quick", q: r.query || "" });
+  if (r.view === "stores")
+    return routeURL("stores", {
+      q: r.query || "",
+      f: r.filter || "all",
+      r: r.region || "all",
+    });
+  return r.view === "saved" ? "#/saved" : null;
+}
 
 function announce(message) {
   clearTimeout(announceTimer);
@@ -93,8 +106,12 @@ function toast(message) {
 }
 function persist() {
   storage.save(state);
+  showStorageWarning();
+}
+function showStorageWarning() {
   $("#storage-warning").hidden = !storage.warning;
-  $("#storage-warning").textContent = storage.warning;
+  if ($("#storage-warning").textContent !== storage.warning)
+    $("#storage-warning").textContent = storage.warning;
 }
 function methodSwitch() {
   return `<fieldset class="method-switch"><legend class="sr-only">Input method</legend>${[
@@ -114,7 +131,7 @@ function smallInput(cheat) {
   const method = chooseMethod(cheat, state.method);
   if (method === "phone")
     return `<span class="mini-phone">${cheat.phone}</span>${state.method === "pad" ? '<span class="tiny">Phone input</span>' : ""}`;
-  return `<span class="mini-sequence" aria-label="${cheat.buttons.map((key) => buttons[key][1]).join(", ")}">${cheat.buttons.map((key) => `<span class="key-${key}" aria-hidden="true">${buttons[key][0]}</span>`).join("")}</span>${state.method === "phone" ? '<span class="tiny">Controller input · phone disputed</span>' : ""}`;
+  return `<span class="mini-sequence"><span class="sr-only">${cheat.buttons.map((key) => buttons[key][1]).join(", ")}</span>${cheat.buttons.map((key) => `<span class="key-${key}" aria-hidden="true">${buttons[key][0]}</span>`).join("")}</span>${state.method === "phone" ? '<span class="tiny">Controller input · phone disputed</span>' : ""}`;
 }
 function cheatRows(items, activeId) {
   return items
@@ -152,17 +169,17 @@ function cheatDetail(cheat, standalone) {
       : "";
   const input =
     method === "phone"
-      ? `<div class="phone-block"><span class="eyebrow">DIAL ON THE IN-GAME PHONE</span><div class="phone-number" id="phone-number" tabindex="0" aria-label="Phone number ${cheat.phone}">${cheat.phone
+      ? `<div class="phone-block"><span class="eyebrow">DIAL ON THE IN-GAME PHONE</span><div class="phone-number" id="phone-number" tabindex="-1" role="group" aria-label="Phone number ${cheat.phone}">${cheat.phone
           .split("-")
           .map(
-            (group, i) =>
-              `<span class="${i < 2 ? "prefix" : ""}">${i ? '<span class="hyphen">-</span>' : ""}${group}</span>`,
+            (group, i, groups) =>
+              `<span class="${i < 2 ? "prefix" : ""}">${group}${i < groups.length - 1 ? '<span class="hyphen">-</span>' : ""}</span>`,
           )
           .join(
             "",
           )}</div><div class="phone-actions"><button class="primary" data-copy="${cheat.id}">Copy number <span aria-hidden="true">⧉</span></button><span class="mono">${cheat.mnemonic}</span></div><p class="tiny">Copying is a reference aid. Enter the number manually in GTA V.</p></div>`
       : `<div class="pad-block"><div class="input-label"><span class="eyebrow">ENTER LEFT TO RIGHT, ROW BY ROW</span><span class="tiny">${cheat.buttons.length} inputs</span></div><ol class="sequence" role="list">${cheat.buttons.map((key, i) => `<li class="input-tile key-${key}"><span class="sr-only">Step ${i + 1}:</span><span class="step" aria-hidden="true">${String(i + 1).padStart(2, "0")}</span><span class="glyph" aria-hidden="true">${buttons[key][0]}</span><span class="key-name">${buttons[key][1]}</span></li>`).join("")}</ol><p class="tiny">Arrows = D-pad. Cross = the × button. Enter during gameplay, with the pause menu closed.</p></div>`;
-  return `<section class="detail-panel" aria-label="Cheat details"><div class="detail-toolbar"><a class="back-link" href="${routeURL("cheats", { c: cheatListRoute.category, q: cheatListRoute.query })}">← All cheats</a>${favoriteButton(cheat)}</div><div class="detail-heading"><span class="eyebrow">${escape(categoryNames[cheat.category])} / ${cheat.unlock ? "UNLOCK REQUIRED" : "STORY MODE"}</span><${standalone ? "h1" : "h2"} tabindex="-1">${escape(cheat.title)}</${standalone ? "h1" : "h2"}><p>${escape(cheat.effect)}</p><a class="save-reminder" href="#/guide">Cheats temporarily disable trophies. Save first ↗</a></div>${cheat.unlock ? `<div class="unlock"><span aria-hidden="true">◇</span><div><strong>Unlock this vehicle first</strong><p>${escape(cheat.note)}</p></div></div>` : ""}${fallback}${input}${!cheat.unlock && cheat.note ? `<p class="usage-note">${escape(cheat.note)}</p>` : ""}${cheat.dispute ? `<details class="source-note"><summary>Why an input is withheld</summary><p>${escape(cheat.dispute)}</p></details>` : ""}<div class="entry-sources"><span class="eyebrow">CHECK THE SOURCES</span><div>${sourceLinks(cheat.sources)}</div><p>Source-checked ${checked} · not tested on a PS5.</p></div><a class="text-link" href="#/guide">How to enter cheats & protect a clean save →</a></section>`;
+  return `<section class="detail-panel" aria-label="Cheat details"><div class="detail-toolbar"><a class="back-link" href="${routeURL("cheats", { c: cheatListRoute.category, q: cheatListRoute.query })}">← All cheats</a>${favoriteButton(cheat)}</div><div class="detail-heading"><span class="eyebrow">${escape(categoryNames[cheat.category])} / ${cheat.unlock ? "UNLOCK REQUIRED" : "STORY MODE"}</span><${standalone ? "h1" : "h2"} tabindex="-1">${escape(cheat.title)}</${standalone ? "h1" : "h2"}><p>${escape(cheat.effect)}</p><a class="save-reminder" href="#/guide">Cheats temporarily disable trophies. Save first →</a></div>${cheat.unlock ? `<div class="unlock"><span aria-hidden="true">◇</span><div><strong>Unlock this vehicle first</strong><p>${escape(cheat.note)}</p></div></div>` : ""}${fallback}${input}${!cheat.unlock && cheat.note ? `<p class="usage-note">${escape(cheat.note)}</p>` : ""}${cheat.dispute ? `<details class="source-note"><summary>Why an input is withheld</summary><p>${escape(cheat.dispute)}</p></details>` : ""}<div class="entry-sources"><span class="eyebrow">CHECK THE SOURCES</span><div>${sourceLinks(cheat.sources)}</div><p>Source-checked ${checked} · not tested on a PS5.</p></div><a class="text-link" href="#/guide">How to enter cheats & protect a clean save →</a></section>`;
 }
 function cheatsView() {
   const standalone = route.view === "cheat";
@@ -171,7 +188,7 @@ function cheatsView() {
     ? cheats.find((c) => c.id === route.id)
     : filteredCheats()[0];
   if (standalone && !selected) return missingView();
-  return `<div class="view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">LOS SANTOS, AT YOUR FINGERTIPS</span><h1 tabindex="-1">Cheat sheet<span class="heading-count">36</span></h1><p>Phone numbers. PlayStation inputs. Straight to the good stuff.</p></div><a class="help-link" href="#/guide">Story Mode only<br><span>Save before using cheats ↗</span></a></div><div class="workspace"><section class="master" aria-label="Find a cheat"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="cheat-search" type="search" maxlength="160" placeholder="Search cheats, vehicles, effects…" aria-label="Search all cheats" value="${escape(cheatListRoute.query || "")}"><kbd aria-hidden="true">/</kbd></label>${!standalone ? methodSwitch() : ""}<div class="chips" aria-label="Cheat categories">${Object.entries(
+  return `<div class="view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">LOS SANTOS, AT YOUR FINGERTIPS</span><h1 tabindex="-1">Cheat sheet<span class="heading-count">${cheats.length}</span></h1><p>Phone numbers. PlayStation inputs. Straight to the good stuff.</p></div><a class="help-link" href="#/guide">Story Mode only<br><span>Save before using cheats →</span></a></div><div class="workspace"><section class="master" aria-label="Find a cheat"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="cheat-search" type="search" maxlength="160" placeholder="Search cheats, vehicles, effects…" aria-label="Search all cheats" value="${escape(cheatListRoute.query || "")}"><kbd aria-hidden="true">/</kbd></label>${!standalone ? methodSwitch() : ""}<div class="chips" aria-label="Cheat categories">${Object.entries(
     categoryNames,
   )
     .map(
@@ -221,7 +238,7 @@ function storesView() {
   if (!standalone) storeListRoute = { ...route };
   const selected = standalone ? stores.find((s) => s.id === route.id) : null;
   if (standalone && !selected) return missingView();
-  return `<div class="view stores-view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">THE HOLD-UP ROUTE BOOK</span><h1 tabindex="-1">Store finder<span class="heading-count">19</span></h1><p>Real map screenshots. Original markers. Your own checklist.</p></div><a class="help-link" href="#/guide">Map guide<br><span>How these labels work ↗</span></a></div><div class="workspace"><section class="master" aria-label="Find a store"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="store-search" type="search" maxlength="160" aria-label="Search stores" placeholder="Area, street, or SR / PR marker…" value="${escape(storeListRoute.query || "")}"></label><div class="store-filters"><select id="store-region" aria-label="Store area">${Object.entries(
+  return `<div class="view stores-view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">THE HOLD-UP ROUTE BOOK</span><h1 tabindex="-1">Store finder<span class="heading-count">${stores.length}</span></h1><p>Real map screenshots. Original markers. Your own checklist.</p></div><a class="help-link" href="#/guide">Map guide<br><span>How these labels work →</span></a></div><div class="workspace"><section class="master" aria-label="Find a store"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="store-search" type="search" maxlength="160" aria-label="Search stores" placeholder="Area, street, or SR / PR marker…" value="${escape(storeListRoute.query || "")}"></label><div class="store-filters"><select id="store-region" aria-label="Store area">${Object.entries(
     storeRegionNames,
   )
     .map(
@@ -245,10 +262,10 @@ function storesView() {
 }
 function savedView() {
   const saved = cheats.filter((c) => state.favorites.includes(c.id));
-  return `<div class="view saved-view"><div class="page-heading"><div><span class="eyebrow">YOUR PERSONAL SHORTLIST</span><h1 tabindex="-1">Saved for later<span class="heading-count">${saved.length}</span></h1><p>The good stuff, one tap away.</p></div>${methodSwitch()}</div><div class="saved-grid"><section><div class="section-label"><h2>Favorite cheats</h2><a href="#/cheats">Browse all →</a></div>${saved.length ? cheatRows(saved) : '<div class="empty"><span class="big-star" aria-hidden="true">☆</span><h2>Make this yours</h2><p>Tap the star beside a cheat to keep it here.</p><a class="button primary" href="#/cheats">Find a favorite →</a></div>'}</section><section class="saved-tools"><div class="panel"><span class="eyebrow">YOUR STORE RUN</span><h2>Keep your place.</h2>${progress()}<a class="button" href="#/stores?f=todo">Find an unchecked store →</a><p class="tiny">Saved in this browser only. There is no account or game sync. Clearing browser data can erase this checklist.</p></div><details class="backup"><summary>Back up or move your list</summary><p>Export a small text file, then paste its contents here on another browser. Import merges favorites and checked stores; it does not clear your existing list.</p><button data-action="export" class="primary">Export backup ↓</button><label for="backup-text">Backup contents</label><textarea id="backup-text" rows="6" maxlength="50000" spellcheck="false" placeholder="Paste a Glovebox backup here"></textarea><button data-action="import">Merge backup</button><p id="backup-status" role="status"></p></details></section></div></div>`;
+  return `<div class="view saved-view"><div class="page-heading"><div><span class="eyebrow">YOUR PERSONAL SHORTLIST</span><h1 tabindex="-1">Saved for later<span class="heading-count">${saved.length}</span></h1><p>The good stuff, one tap away.</p></div>${methodSwitch()}</div><div class="saved-grid"><section><div class="section-label"><h2>Favorite cheats</h2><a href="#/cheats">Browse all →</a></div>${saved.length ? cheatRows(saved) : '<div class="empty"><span class="big-star" aria-hidden="true">☆</span><h2>Make this yours</h2><p>Tap the star beside a cheat to keep it here.</p><a class="button primary" href="#/cheats">Find a favorite →</a></div>'}</section><section class="saved-tools"><div class="panel"><span class="eyebrow">YOUR STORE RUN</span><h2>Keep your place.</h2>${progress()}<a class="button" href="#/stores?f=todo">Find an unchecked store →</a><p class="tiny">Saved in this browser only. There is no account or game sync. Clearing browser data can erase this checklist.</p></div><details class="backup"><summary>Back up or move your list</summary><p>Export a small text file, then paste its contents here on another browser. Import merges favorites and checked stores; it does not clear your existing list.</p><button data-action="export" class="primary">Export backup ↓</button>${storage.recovery ? '<aside class="note"><p>An older saved value could not be read. Its original contents are kept separately; this does not replace your current selections.</p><button data-action="export-recovery">Export recovery copy ↓</button></aside>' : ""}<label for="backup-text">Backup contents</label><textarea id="backup-text" rows="6" maxlength="50000" spellcheck="false" placeholder="Paste a Glovebox backup here"></textarea><button data-action="import">Merge backup</button><p id="backup-status" role="status"></p></details></section></div></div>`;
 }
 function guideView() {
-  return `<div class="view guide-view"><div class="page-heading"><div><span class="eyebrow">READ ONCE. KEEP PLAYING.</span><h1 tabindex="-1">The essentials</h1><p>Getting codes in, finding stores, and knowing what to trust.</p></div><span class="checked-stamp">CHECKED<br><strong>04 NOV 2026</strong></span></div><div class="guide-grid"><section class="panel"><span class="eyebrow">01 / PLAYSTATION INPUTS</span><h2>Two ways to enter a cheat.</h2><h3>With the in-game phone</h3><ol class="howto"><li>D-pad <strong>Up</strong> to open the phone.</li><li>Open <strong>Contacts</strong>, then press <strong>Square</strong> for the keypad.</li><li>Enter the number. Press <strong>Square</strong> to call it.</li></ol><p>These are GTA V numbers. Use your character’s phone, not your real phone. The “Copy” button only copies text on this device.</p><h3>With the controller</h3><p>Close the pause menu and enter the sequence promptly during gameplay. Directions use the D-pad. Read across each row, then continue on the next; Cross means the × button.</p><p>${sourceLinks(["gtabase", "phoneGuide"])}</p></section><section class="panel"><span class="eyebrow">02 / SAVES & TROPHIES</span><h2>Keep a clean save.</h2><blockquote>“Saving is allowed when cheat codes are enabled but achievements are temporarily disabled.”<cite>${sourceLinks(["rockstar"])} · retrieved ${checked}</cite></blockquote><p>Rockstar says reloading a save or rebooting the console resets cheats. Re-entering a code usually turns it off, but there are exceptions. A mission can also disable free-roam cheats.</p><div class="note"><strong>Our suggestion</strong><p>Make a separate manual save before experimenting. Reload your clean save before returning to trophy or story progress.</p></div></section><section class="panel"><span class="eyebrow">03 / CHEAT DENIED?</span><h2>Check the situation.</h2><ul class="plain-list"><li><strong>Story Mode only.</strong> These codes do not activate in GTA Online.</li><li><strong>Finish the current mission or activity.</strong> Some cheats are unavailable in certain contexts.</li><li><strong>Give vehicles clear space.</strong> Buildings, interiors and cramped roads can prevent a spawn.</li><li><strong>Check the unlock badge.</strong> Dodo needs Sea Plane, Duke O’Death needs Duel, and Kraken needs the Wildlife Photography Challenge.</li><li><strong>Skyfall has its own restrictions.</strong> It is not a helicopter substitute; you cannot open a parachute during it.</li></ul><p>${sourceLinks(["rockstar", "gtabase"])}</p><p>No built-in money, tank or jet spawn code is included because none is published in the checked GTA V code lists.</p></section><section class="panel"><span class="eyebrow">04 / THE REAL MAPS</span><h2>Match the pin, not the numbering.</h2><p>The overview retains GosuNoob’s <strong>SR1–SR9</strong> and <strong>PR1–PR10</strong> labels. Fiction Horizon’s <strong>close-up 1–19</strong> is a different order. Every store detail shows both identifiers.</p><p>The central crosshair in a close-up is your target. Match nearby streets and coastline on your in-game map, then follow the PS5 map’s own Point of Interest control. Other pins and Xbox button prompts belong to the source screenshot.</p><p>The checklist does not add pins in GTA V. Images load from the original publishers and need an internet connection. If an embed fails, use its source link.</p><p>${sourceLinks(["gosunoob", "fictionhorizon", "powerpyx"])}</p></section><section class="panel wide"><span class="eyebrow">05 / THE HONEST BITS</span><h2>Source-checked. Not console-tested.</h2><p>Published guides make mistakes too. Inputs were compared across sources; no cheat was tested on a physical PS5 for this guide. These disagreements remain visible rather than being presented as settled facts.</p><div class="disputes"><div><strong>Fast run & drunk mode</strong><p>Published phone numbers conflict. Their agreed controller inputs remain available. A phone-keypad mnemonic is a useful typo check, not proof that a code activates in the game.</p></div><div><strong>Rapid GT</strong><p>One or two opening R2 presses? Published controller lists differ. The agreed phone number is shown instead.</p></div><div><strong>Strawberry & northwest-hills stores</strong><p>Street or district names conflict. Both retain the original screenshot and overview marker; the naming issue is explained on the store page.</p></div><div><strong>Corrections applied</strong><p>PCJ-600 and Sanchez codes are not swapped. Trashmaster keeps all seven digits after 1-999. The weapons cheat gives a loadout, not every weapon or infinite ammo.</p></div></div></section><section class="panel"><span class="eyebrow">06 / KEEP IT HANDY</span><h2>One tap from your phone.</h2><p>Bookmark this page or use your browser’s <strong>Add to Home Screen</strong> option. On iPhone, look in Safari’s Share menu; on Android, look in your browser’s menu. ${sourceLinks(["apple"])}</p><p>Favorites and the checklist are local to the browser you use. A Home Screen shortcut or another browser may have separate storage. Use <a href="#/saved">Saved → Back up or move your list</a> when switching.</p><p>There is no offline guarantee. Open the guide while connected; publisher-hosted maps can become unavailable.</p></section><section class="panel"><span class="eyebrow">07 / PRIVACY & CREDITS</span><h2>A small, independent guide.</h2><p>No accounts, analytics, advertising or tracking scripts. Your saved selections stay in browser storage unless you export them. GitHub serves the site; map requests go directly to the image publishers, which can receive standard request information.</p><p>Map art and game screenshots belong to their respective rights holders. They are embedded from the attributed publishers, not regenerated or included in this repository’s code license.</p><p>Barlow Condensed and Overpass Mono are self-hosted under the SIL Open Font License. The guide’s original code uses MIT.</p><p>Unofficial; not affiliated with Rockstar Games or Take-Two.</p></section><section class="panel wide"><span class="eyebrow">SOURCE REGISTER</span><h2>Follow the evidence.</h2><div class="source-register">${Object.values(
+  return `<div class="view guide-view"><div class="page-heading"><div><span class="eyebrow">READ ONCE. KEEP PLAYING.</span><h1 tabindex="-1">The essentials</h1><p>Getting codes in, finding stores, and knowing what to trust.</p></div><span class="checked-stamp">CHECKED<br><strong>${checked.toUpperCase()}</strong></span></div><div class="guide-grid"><section class="panel"><span class="eyebrow">01 / PLAYSTATION INPUTS</span><h2>Two ways to enter a cheat.</h2><h3>With the in-game phone</h3><ol class="howto"><li>D-pad <strong>Up</strong> to open the phone.</li><li>Open <strong>Contacts</strong>, then press <strong>Square</strong> for the keypad.</li><li>Enter the number. Press <strong>Square</strong> to call it.</li></ol><p>These are GTA V numbers. Use your character’s phone, not your real phone. The “Copy” button only copies text on this device.</p><h3>With the controller</h3><p>Close the pause menu and enter the sequence promptly during gameplay. Directions use the D-pad. Read across each row, then continue on the next; Cross means the × button.</p><p>${sourceLinks(["gtabase", "phoneGuide"])}</p></section><section class="panel"><span class="eyebrow">02 / SAVES & TROPHIES</span><h2>Keep a clean save.</h2><blockquote>“Saving is allowed when cheat codes are enabled but achievements are temporarily disabled.”<cite>${sourceLinks(["rockstar"])} · retrieved ${checked}</cite></blockquote><p>Rockstar says reloading a save or rebooting the console resets cheats. Re-entering a code usually turns it off, but there are exceptions. A mission can also disable free-roam cheats.</p><div class="note"><strong>Our suggestion</strong><p>Make a separate manual save before experimenting. Reload your clean save before returning to trophy or story progress.</p></div></section><section class="panel"><span class="eyebrow">03 / CHEAT DENIED?</span><h2>Check the situation.</h2><ul class="plain-list"><li><strong>Story Mode only.</strong> These codes do not activate in GTA Online.</li><li><strong>Finish the current mission or activity.</strong> Some cheats are unavailable in certain contexts.</li><li><strong>Give vehicles clear space.</strong> Buildings, interiors and cramped roads can prevent a spawn.</li><li><strong>Check the unlock badge.</strong> Dodo needs Sea Plane, Duke O’Death needs Duel, and Kraken needs the Wildlife Photography Challenge.</li><li><strong>Skyfall has its own restrictions.</strong> It is not a helicopter substitute; you cannot open a parachute during it.</li></ul><p>${sourceLinks(["rockstar", "gtabase"])}</p><p>No built-in money, tank or jet spawn code is included because none is published in the checked GTA V code lists.</p></section><section class="panel"><span class="eyebrow">04 / THE REAL MAPS</span><h2>Match the pin, not the numbering.</h2><p>The overview retains GosuNoob’s <strong>SR1–SR9</strong> and <strong>PR1–PR10</strong> labels. Fiction Horizon’s <strong>close-up 1–19</strong> is a different order. Every store detail shows both identifiers.</p><p>The central crosshair in a close-up is your target. Match nearby streets and coastline on your in-game map, then follow the PS5 map’s own Point of Interest control. Other pins and Xbox button prompts belong to the source screenshot.</p><p>The checklist does not add pins in GTA V. Images load from the original publishers and need an internet connection. If an embed fails, use its source link.</p><p>${sourceLinks(["gosunoob", "fictionhorizon", "powerpyx"])}</p></section><section class="panel wide"><span class="eyebrow">05 / THE HONEST BITS</span><h2>Source-checked. Not console-tested.</h2><p>Published guides make mistakes too. Inputs were compared across sources; no cheat was tested on a physical PS5 for this guide. These disagreements remain visible rather than being presented as settled facts.</p><div class="disputes"><div><strong>Fast run & drunk mode</strong><p>Published phone numbers conflict. Their agreed controller inputs remain available. A phone-keypad mnemonic is a useful typo check, not proof that a code activates in the game.</p></div><div><strong>Rapid GT</strong><p>One or two opening R2 presses? Published controller lists differ. The agreed phone number is shown instead.</p></div><div><strong>Strawberry & northwest-hills stores</strong><p>Street or district names conflict. Both retain the original screenshot and overview marker; the naming issue is explained on the store page.</p></div><div><strong>Corrections applied</strong><p>PCJ-600 and Sanchez codes are not swapped. Trashmaster keeps all seven digits after 1-999. The weapons cheat gives a loadout, not every weapon or infinite ammo.</p></div></div></section><section class="panel"><span class="eyebrow">06 / KEEP IT HANDY</span><h2>One tap from your phone.</h2><p>Bookmark this page or use your browser’s <strong>Add to Home Screen</strong> option. On iPhone, look in Safari’s Share menu; on Android, look in your browser’s menu. ${sourceLinks(["apple"])}</p><p>Favorites and the checklist are local to the browser you use. A Home Screen shortcut or another browser may have separate storage. Use <a href="#/saved">Saved → Back up or move your list</a> when switching.</p><p>There is no offline guarantee. Open the guide while connected; publisher-hosted maps can become unavailable.</p></section><section class="panel"><span class="eyebrow">07 / PRIVACY & CREDITS</span><h2>A small, independent guide.</h2><p>No accounts, analytics, advertising or tracking scripts. Your saved selections stay in browser storage unless you export them. GitHub serves the site; map requests go directly to the image publishers, which can receive standard request information.</p><p>Map art and game screenshots belong to their respective rights holders. They are embedded from the attributed publishers, not regenerated or included in this repository’s code license.</p><p>Barlow Condensed and Overpass Mono are self-hosted under the SIL Open Font License. The guide’s original code uses MIT.</p><p>Unofficial; not affiliated with Rockstar Games or Take-Two.</p></section><section class="panel wide"><span class="eyebrow">SOURCE REGISTER</span><h2>Follow the evidence.</h2><div class="source-register">${Object.values(
     sources,
   )
     .map(
@@ -292,7 +309,7 @@ function render({ focus = true } = {}) {
           }[view];
   document.title = `${title || "Page not found"} · Glovebox / GTA V`;
   mountMaps();
-  persist();
+  showStorageWarning();
   if (focus) {
     const h =
       route.view === "cheat" || route.view === "store"
@@ -355,6 +372,14 @@ function openMap(id) {
       ? "Original overview · SR / PR markers"
       : `${store.id} · ${store.area} · close-up ${store.sequence}`;
   $("#map-viewport").className = "map-viewport";
+  document
+    .querySelectorAll("[data-zoom]")
+    .forEach((button) =>
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.zoom === "fit"),
+      ),
+    );
   $("#map-viewport").innerHTML =
     `<div class="map-load" data-map="${id}"><p class="map-status">Loading original image…</p></div>`;
   $("#map-dialog").showModal();
@@ -435,25 +460,64 @@ document.addEventListener("change", (event) => {
     );
   }
   if (target.id === "store-filter" || target.id === "store-region") {
-    location.hash = routeURL("stores", {
-      q: storeListRoute.query,
-      f: $("#store-filter").value,
-      r: $("#store-region").value,
-    });
+    const leavingDetail = route.view === "store";
+    const oldY = window.scrollY;
+    storeListRoute.filter = $("#store-filter").value;
+    storeListRoute.region = $("#store-region").value;
+    history.replaceState(
+      null,
+      "",
+      routeURL("stores", {
+        q: storeListRoute.query,
+        f: storeListRoute.filter,
+        r: storeListRoute.region,
+      }),
+    );
+    route = { ...storeListRoute };
+    if (leavingDetail) {
+      render({ focus: false });
+      document.getElementById(target.id)?.focus({ preventScroll: true });
+      window.scrollTo({ top: oldY, behavior: "instant" });
+    } else $("#store-list").innerHTML = storeListContent();
+    announce(`${filteredStores().length} matching stores`);
   }
 });
+document.addEventListener(
+  "click",
+  (event) => {
+    const link = event.target.closest(".row-link, .store-row-link");
+    const key = listKey(route);
+    if (link && key)
+      listPositions.set(key, {
+        y: window.scrollY,
+        href: link.getAttribute("href"),
+      });
+  },
+  true,
+);
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button, a[data-action]");
   if (!target) return;
   if (target.dataset.favorite) {
     const id = target.dataset.favorite,
       present = state.favorites.includes(id);
+    const favoriteIndex = [
+      ...document.querySelectorAll("[data-favorite]"),
+    ].indexOf(target);
+    const oldY = window.scrollY;
     state.favorites = present
       ? state.favorites.filter((item) => item !== id)
       : [...state.favorites, id];
     persist();
-    if (route.view === "saved") render();
-    else
+    if (route.view === "saved") {
+      render({ focus: false });
+      const remaining = [...document.querySelectorAll("[data-favorite]")];
+      (
+        remaining[Math.min(favoriteIndex, remaining.length - 1)] ||
+        $(".section-label a")
+      )?.focus({ preventScroll: true });
+      window.scrollTo({ top: oldY, behavior: "instant" });
+    } else
       document.querySelectorAll(`[data-favorite="${id}"]`).forEach((button) => {
         button.setAttribute("aria-pressed", String(!present));
         button.innerHTML = `<span aria-hidden="true">${present ? "☆" : "★"}</span>`;
@@ -495,6 +559,11 @@ document.addEventListener("click", async (event) => {
     mountMaps(holder.parentElement);
   }
   if (target.dataset.zoom) {
+    document
+      .querySelectorAll("[data-zoom]")
+      .forEach((button) =>
+        button.setAttribute("aria-pressed", String(button === target)),
+      );
     $("#map-viewport").className =
       `map-viewport ${target.dataset.zoom === "fit" ? "" : "zoom-" + target.dataset.zoom}`;
     $("#map-viewport").scrollTo(0, 0);
@@ -513,14 +582,20 @@ document.addEventListener("click", async (event) => {
     case "clear-store-search":
       location.hash = "#/stores";
       break;
+    case "export-recovery":
     case "export": {
-      const content = JSON.stringify(state, null, 2);
+      const isRecovery = target.dataset.action === "export-recovery";
+      const content = isRecovery
+        ? storage.recovery
+        : JSON.stringify(state, null, 2);
       $("#backup-text").value = content;
       const blob = new Blob([content], { type: "application/json" });
       const url = URL.createObjectURL(blob),
         link = document.createElement("a");
       link.href = url;
-      link.download = "glovebox-backup.json";
+      link.download = isRecovery
+        ? "glovebox-recovery.txt"
+        : "glovebox-backup.json";
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       $("#backup-status").textContent =
@@ -576,7 +651,49 @@ window.addEventListener("hashchange", () => {
   const next = parseRoute(location.hash);
   if (!next) return;
   if ($("#map-dialog").open) $("#map-dialog").close();
+  const returning =
+    (route.view === "cheat" && ["cheats", "saved"].includes(next.view)) ||
+    (route.view === "store" && next.view === "stores");
   route = next;
-  render();
+  const position = returning ? listPositions.get(listKey(route)) : null;
+  render({ focus: !position });
+  if (position) {
+    [...document.querySelectorAll(".row-link, .store-row-link")]
+      .find((link) => link.getAttribute("href") === position.href)
+      ?.focus({ preventScroll: true });
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: position.y, behavior: "instant" }),
+    );
+  }
+});
+window.addEventListener("storage", (event) => {
+  if (event.key !== STORAGE_KEY && event.key !== null) return;
+  if (storage.receive(event.newValue)) {
+    state = storage.state;
+    const active = document.activeElement,
+      oldY = window.scrollY;
+    const draft = $("#backup-text")?.value,
+      backupOpen = $(".backup")?.open;
+    const selection = active?.selectionStart;
+    render({ focus: false });
+    if (draft !== undefined && $("#backup-text"))
+      $("#backup-text").value = draft;
+    if (backupOpen && $(".backup")) $(".backup").open = true;
+    const replacement = active?.isConnected
+      ? active
+      : active?.id
+        ? document.getElementById(active.id)
+        : active?.dataset.favorite
+          ? document.querySelector(
+              `[data-favorite="${active.dataset.favorite}"]`,
+            )
+          : null;
+    replacement?.focus({ preventScroll: true });
+    if (replacement?.setSelectionRange && typeof selection === "number")
+      replacement.setSelectionRange(selection, selection);
+    window.scrollTo({ top: oldY, behavior: "instant" });
+    announce("Saved selections updated from another tab.");
+  }
+  showStorageWarning();
 });
 render({ focus: false });

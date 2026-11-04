@@ -65,3 +65,12 @@ The first column is printed on GosuNoob's overview. The second is Fiction Horizo
 Images remain on publisher servers. Failure states provide the source link and a manual retry; the app does not silently substitute generated art or invent a coordinate. Source screenshots contain Xbox prompts and other player pins; the UI explains that the central crosshair is the location and PS5 players should follow their own map legend.
 
 The overview uses GosuNoob's published 728×1024 WebP derivative of the same original map. The larger JPG returned intermittent failures in browser QA; the WebP loaded with normal browser referrer behavior. The image itself is unchanged and all SR/PR labels are retained.
+
+
+## Evidence retained after review
+
+[The image crosswalk fixture](tests/closeup-evidence.json) retains all 19 original image URLs, their marker/sequence pairing and SHA-256 hashes of the inspected image bytes. This guards against accidentally swapping the supplied maps; it is not an automated proof of a game location. Additional visual rechecks confirmed the generic SR7 filename really contains close-up **1/19**, the north-coast SR1 image contains **18/19**, and the distinct desert SR3 image contains **16/19**.
+
+GTA Base explicitly describes the three special spawns as enhanced PS4/PS5 codes gated by the listed activities. Its current PS5 section does not specify the historical returning-player account restriction, so that restriction is not added to this guide. The same page supports holding Jump for extra height and the Skyfall/Super Jump incompatibility. The unsourced detail about Director Mode actor availability was removed.
+
+[GTA BOOM's printable phone guide](https://media.gtaboom.com/media/meta/gta-5-cheats.pdf) supplies the PlayStation phone flow, including Square to open the keypad and Square to dial. Number groups are for readability; compare the digits without hyphens. Two conflicting phone variants remain withheld regardless of mnemonic consistency.

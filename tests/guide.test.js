@@ -6,6 +6,8 @@ import { stores, overview } from "../site/data/stores.js";
 import { sources } from "../site/data/sources.js";
 import {
   parseRoute,
+  routeURL,
+  RECOVERY_KEY,
   searchItems,
   chooseMethod,
   createStorage,
@@ -130,6 +132,13 @@ test("19 original marker IDs and close-up sequence numbers form complete distinc
   }
 });
 test("hash routing is safe under a GitHub Pages project path and ignores normal anchors", () => {
+  const project = new URL(
+    routeURL("stores", { q: "Sandy Shores", f: "todo" }),
+    "https://example.github.io/gta-v-ps5-guide/",
+  );
+  assert.equal(project.pathname, "/gta-v-ps5-guide/");
+  assert.equal(parseRoute(project.hash).query, "Sandy Shores");
+  assert.equal(parseRoute(project.hash).filter, "todo");
   assert.equal(parseRoute("#main"), null);
   assert.equal(parseRoute("#/cheat/%E0%A4%A").view, "missing");
   assert.equal(parseRoute("#/store").view, "missing");
@@ -242,6 +251,10 @@ test("mobile metadata prevents telephone links and permits zoom; CSP permits exa
   assert.match(html, /name="format-detection" content="telephone=no"/);
   assert.match(html, /width=device-width, initial-scale=1, viewport-fit=cover/);
   assert.doesNotMatch(html, /maximum-scale|user-scalable|tel:/);
+  assert.doesNotMatch(
+    readFileSync(new URL("../site/app.js", import.meta.url), "utf8"),
+    /tel:/,
+  );
   const policy = html.match(
     /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/,
   )[1];
@@ -261,4 +274,100 @@ test("mobile metadata prevents telephone links and permits zoom; CSP permits exa
   ];
   assert.deepEqual(imageSources.sort(), expected.sort());
   assert.doesNotMatch(html, /(?:src|href)="\/(?!\/)/);
+});
+
+test("route generation works without the newer URLSearchParams size property", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    URLSearchParams.prototype,
+    "size",
+  );
+  try {
+    delete URLSearchParams.prototype.size;
+    assert.equal(
+      routeURL("cheats", { c: "vehicles", q: "fast bike" }),
+      "#/cheats?c=vehicles&q=fast+bike",
+    );
+    assert.equal(routeURL("stores"), "#/stores");
+  } finally {
+    if (descriptor)
+      Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
+  }
+});
+
+test("corrupt or newer saved data is recoverable and new selections survive reload", () => {
+  for (const raw of [
+    "{broken",
+    JSON.stringify({ version: 2, favorites: ["future"] }),
+  ]) {
+    const data = new Map([[STORAGE_KEY, raw]]);
+    const api = {
+      getItem: (key) => data.get(key) ?? null,
+      setItem: (key, value) => data.set(key, value),
+    };
+    const a = createStorage(() => api, cheatIds, storeIds);
+    assert.equal(a.recovery, raw);
+    assert.equal(data.get(RECOVERY_KEY), raw);
+    assert.match(a.warning, /recovery copy/);
+    a.save({ ...fresh(), favorites: ["buzzard"] });
+    const b = createStorage(() => api, cheatIds, storeIds);
+    assert.deepEqual(b.state.favorites, ["buzzard"]);
+    assert.equal(b.recovery, raw);
+  }
+});
+
+test("a failed recovery backup never overwrites the unreadable original", () => {
+  const data = new Map([[STORAGE_KEY, "original unreadable value"]]);
+  const api = {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => {
+      if (key === RECOVERY_KEY) throw new Error("Quota");
+      data.set(key, value);
+    },
+  };
+  const store = createStorage(() => api, cheatIds, storeIds);
+  store.save({ ...fresh(), stores: ["SR5"] });
+  assert.equal(data.get(STORAGE_KEY), "original unreadable value");
+  assert.deepEqual(store.state.stores, ["SR5"]);
+  assert.match(store.warning, /original is untouched/);
+});
+
+test("incoming tab state updates memory without writing it back, and rejects corruption", () => {
+  let writes = 0;
+  const store = createStorage(
+    () => ({ getItem: () => null, setItem: () => writes++ }),
+    cheatIds,
+    storeIds,
+  );
+  const initialWrites = writes;
+  assert.equal(
+    store.receive(
+      JSON.stringify({ ...fresh(), favorites: ["sanchez"], stores: ["SR5"] }),
+    ),
+    true,
+  );
+  assert.deepEqual(store.state.favorites, ["sanchez"]);
+  assert.equal(writes, initialWrites);
+  assert.equal(store.receive("{broken"), false);
+  assert.deepEqual(store.state.stores, ["SR5"]);
+  assert.equal(store.receive(null), true);
+  assert.deepEqual(store.state, fresh());
+});
+
+test("all close-up links preserve the inspected original image-to-marker crosswalk", () => {
+  const evidence = JSON.parse(
+    readFileSync(new URL("./closeup-evidence.json", import.meta.url)),
+  );
+  assert.equal(evidence.images.length, 19);
+  for (const original of evidence.images) {
+    const actual = stores.find((s) => s.id === original.label);
+    assert.equal(actual.image, original.image, original.label);
+    assert.equal(actual.sequence, original.sequence, original.label);
+    assert.match(original.sha256, /^[a-f0-9]{64}$/);
+  }
+  for (const [id, observation] of Object.entries(evidence.reviewRechecks)) {
+    assert.equal(
+      stores.find((s) => s.id === id).sequence,
+      Number(observation.printedNumber.split("/")[0]),
+    );
+  }
 });

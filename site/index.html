@@ -26,6 +26,7 @@
       type="font/woff2"
       crossorigin
     />
+    <script src="./boot.js"></script>
     <script type="module" src="./app.js"></script>
   </head>
   <body>
@@ -39,7 +40,7 @@
       <span class="edition"><i aria-hidden="true"></i> STORY MODE</span>
       <nav class="navigation" aria-label="Main navigation">
         <a href="#/cheats" data-nav="cheats"
-          ><span aria-hidden="true">⌘</span>Cheats</a
+          ><span aria-hidden="true">▦</span>Cheats</a
         >
         <a href="#/stores" data-nav="stores"
           ><span aria-hidden="true">⌖</span>Stores</a
@@ -58,8 +59,30 @@
       role="status"
       hidden
     ></div>
+    <div id="runtime-error" class="storage-warning" role="alert" hidden>
+      Part of the guide could not load or finish an action.
+      <a href="./">Reload the guide</a> or use the source links below. Export
+      any unsaved selections first.
+    </div>
     <main id="main" tabindex="-1">
-      <div id="app"><p class="loading">Opening your glovebox…</p></div>
+      <div id="app">
+        <div class="loading">
+          <p>Opening your glovebox…</p>
+          <p>
+            If this message stays here, <a href="./">reload the guide</a> or use
+            the
+            <a
+              href="https://www.gtabase.com/grand-theft-auto-v/gta-5-cheats-ps5-ps4-ps3-cheat-codes"
+              >published cheat list</a
+            >
+            and
+            <a
+              href="https://www.gosunoob.com/grand-theft-auto-5/gta-5-stores-places-you-can-rob/"
+              >original store map</a
+            >.
+          </p>
+        </div>
+      </div>
       <noscript
         ><p>
           This guide needs JavaScript for searching, maps and saved items.
@@ -79,7 +102,7 @@
     <footer class="site-footer">
       <span>Source-checked 04 NOV 2026</span
       ><span>Unofficial · not affiliated with Rockstar Games or Take-Two</span
-      ><a href="#/guide">Sources & limitations ↗</a>
+      ><a href="#/guide">Sources & limitations →</a>
     </footer>
     <div
       id="announcement"
@@ -94,9 +117,9 @@
         <button type="button" data-action="close-map">Close ✕</button>
       </div>
       <div class="dialog-tools">
-        <button type="button" data-zoom="fit">Fit</button
-        ><button type="button" data-zoom="2">2×</button
-        ><button type="button" data-zoom="3">3×</button
+        <button type="button" data-zoom="fit" aria-pressed="true">Fit</button
+        ><button type="button" data-zoom="2" aria-pressed="false">2×</button
+        ><button type="button" data-zoom="3" aria-pressed="false">3×</button
         ><span>Scroll to pan · pinch to zoom</span>
       </div>
       <div id="map-viewport" class="map-viewport"></div>

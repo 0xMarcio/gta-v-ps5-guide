@@ -1,0 +1,175 @@
+{
+  "description": "Snapshot of the 19 image-to-marker links in the supplied original guide, before implementation. All images were visually inspected. Hashes identify the inspected bytes; tests do not download or prove in-game positions.",
+  "sources": [
+    "https://www.gosunoob.com/grand-theft-auto-5/gta-5-stores-places-you-can-rob/",
+    "https://fictionhorizon.com/heres-what-convenience-stores-in-gta-v-are-how-to-rob-them/"
+  ],
+  "images": [
+    {
+      "label": "SR7",
+      "sequence": 1,
+      "titleInOriginal": "24/7 - Downtown Vinewood",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/gta-convenience-store-map.webp",
+      "bytes": 52346,
+      "sha256": "cdf18a06ac8d7a9c5f38a761e6f0b0757769a4113f62d0781adaccf83dc37cad"
+    },
+    {
+      "label": "PR5",
+      "sequence": 2,
+      "titleInOriginal": "LTD - Mirror Park",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Ltd-Gas-Station-E-Mirror-Drive-Mirror-Park.webp",
+      "bytes": 46468,
+      "sha256": "62e940aba193a0fc4d18766b7479c21801f5d51cc51a5561f1ad41bf1bacc124"
+    },
+    {
+      "label": "PR9",
+      "sequence": 3,
+      "titleInOriginal": "Rob's Liquor - Murrieta Heights",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Robs-Liquor-Store.webp",
+      "bytes": 47434,
+      "sha256": "cc2097397f07d516207dc18db5aa595336b3e69bec4ac290dd910fcd6b77fd7e"
+    },
+    {
+      "label": "SR9",
+      "sequence": 4,
+      "titleInOriginal": "24/7 - Strawberry",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket.webp",
+      "bytes": 54534,
+      "sha256": "215caf25ffd4a124a75a2cef5531a4a0b9c956e7807d65082057902b87ed1367"
+    },
+    {
+      "label": "PR10",
+      "sequence": 5,
+      "titleInOriginal": "LTD - Davis / Grove Street",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Ltd-Gas-Station.webp",
+      "bytes": 52116,
+      "sha256": "f1f34e6ad70c3c3fabc9ae909c78ce3f7189212bedb27384c2e3397abeb13bc5"
+    },
+    {
+      "label": "PR8",
+      "sequence": 6,
+      "titleInOriginal": "LTD - Little Seoul",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Ltd-Gas-Station-1.webp",
+      "bytes": 47834,
+      "sha256": "3544e7c58bf0ae7a5726689e95beb72c15c7c5609f5d1c49c63c976d6de5bb63"
+    },
+    {
+      "label": "PR7",
+      "sequence": 7,
+      "titleInOriginal": "Rob's Liquor - Vespucci Canals",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Robs-Liquor-Store-1.webp",
+      "bytes": 45858,
+      "sha256": "cd03fcde94298ef724bfe08d006fc533d8b9a3fa131e183faba8ab43422c1572"
+    },
+    {
+      "label": "PR6",
+      "sequence": 8,
+      "titleInOriginal": "Rob's Liquor - Morningwood",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Robs-Liquor-Store-2.webp",
+      "bytes": 39438,
+      "sha256": "bd0c6974082355dbd8636bf54dbec066276a9fcb28445db3411fe1900016e119"
+    },
+    {
+      "label": "PR4",
+      "sequence": 9,
+      "titleInOriginal": "LTD - northwest hills / Richman Glen",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Tongva-Drive.webp",
+      "bytes": 25508,
+      "sha256": "adf40ba5e7c1f53a049332a3ffcf12d9622ea1cf5de335046f54464475a80fd1"
+    },
+    {
+      "label": "PR3",
+      "sequence": 10,
+      "titleInOriginal": "Rob's Liquor - Great Ocean Highway",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Robs-Liquor-Store-Great-Ocean-Highway.webp",
+      "bytes": 23028,
+      "sha256": "00572e3c51de61b43618adbea1332f8d9dd660a080e87dba872f9a4ac32bbe7e"
+    },
+    {
+      "label": "SR6",
+      "sequence": 11,
+      "titleInOriginal": "24/7 - Ineseno Road",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Ineseno-Road.webp",
+      "bytes": 23414,
+      "sha256": "a281de28ef3be3321c62d7e49869b3bc9e542c8c89144b729f64d24ad1da15a9"
+    },
+    {
+      "label": "SR5",
+      "sequence": 12,
+      "titleInOriginal": "24/7 - Chumash",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Barbareno-Road.webp",
+      "bytes": 28168,
+      "sha256": "66b8e864f03807574d808e00db823bbca0cd0475d74bb5cc14a7e772412c0a41"
+    },
+    {
+      "label": "SR4",
+      "sequence": 13,
+      "titleInOriginal": "24/7 - Harmony / Route 68",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Route-68.webp",
+      "bytes": 42188,
+      "sha256": "c714500d8e5b41fc489be3ab87a77bfa18beb8a196ce9ad30f6ec2d1fd9cd7df"
+    },
+    {
+      "label": "PR2",
+      "sequence": 14,
+      "titleInOriginal": "Scoops Liquor Barn - Route 68",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Scoops-Liquor-Barn.webp",
+      "bytes": 37144,
+      "sha256": "c7160eebca23e48c3b7af56b4411128b227eaed5965350f21d76d61b3a4bbc3e"
+    },
+    {
+      "label": "SR2",
+      "sequence": 15,
+      "titleInOriginal": "24/7 - Sandy Shores",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Niland-Avenue.webp",
+      "bytes": 39118,
+      "sha256": "63fef9cbf3a5124b1984eba709c30e3a582053ff197d3e8bc02bb22ff8e61de8"
+    },
+    {
+      "label": "SR3",
+      "sequence": 16,
+      "titleInOriginal": "24/7 - Senora Freeway / desert",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Senora-Freeway.webp",
+      "bytes": 40942,
+      "sha256": "a938236ff6a552b0a74ffc1cd213b8f394a246034013d75a8474e7e22b8bc66a"
+    },
+    {
+      "label": "PR1",
+      "sequence": 17,
+      "titleInOriginal": "LTD - Grapeseed",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/Ltd-Gas-Station-Grapeseed-Main-Street.webp",
+      "bytes": 29084,
+      "sha256": "fe40279419ed1c9c3827cf31f64bf8a8d1978fa5267ce505b2c325960f3e9302"
+    },
+    {
+      "label": "SR1",
+      "sequence": 18,
+      "titleInOriginal": "24/7 - north coast / Mount Chiliad",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/supermarket-senora-freeway.webp",
+      "bytes": 22608,
+      "sha256": "a15de29c890e9bb788b601aa77def0f39841ebd1814aa1d19b2ec23bc52fe30f"
+    },
+    {
+      "label": "SR8",
+      "sequence": 19,
+      "titleInOriginal": "24/7 - Palomino Freeway",
+      "image": "https://fictionhorizon.com/wp-content/uploads/2024/03/247-Supermarket-Palomino-Freeway.webp",
+      "bytes": 25584,
+      "sha256": "3429ae4d480b259cce7e77223622fe147014e68954571061fc1fb602551a77fe"
+    }
+  ],
+  "reviewRechecks": {
+    "SR7": {
+      "printedNumber": "1/19",
+      "visual": "Central crosshair at the northern edge of the city grid; racetrack to the east. This is a close-up, despite the generic filename."
+    },
+    "SR1": {
+      "printedNumber": "18/19",
+      "visual": "North coast, highway near the beach and a small loop road. Distinct from the desert freeway image."
+    },
+    "SR3": {
+      "printedNumber": "16/19",
+      "visual": "Freeway along the desert edge, street grid to the northwest and winding tracks to the southeast."
+    }
+  }
+}
