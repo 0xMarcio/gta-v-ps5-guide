@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#121315" />
+    <meta
+      name="description"
+      content="Glovebox: a phone-friendly GTA V Story Mode guide for PS5. Cheat inputs, 19 real store map close-ups, saved favorites, and source notes."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' https://fictionhorizon.com https://cdn.gosu-noob.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <title>Glovebox · GTA V / PS5 guide</title>
+    <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="preload"
+      href="./assets/fonts/barlow-condensed-700.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to guide</a>
+    <header class="masthead">
+      <a class="brand" href="#/cheats" aria-label="Glovebox home"
+        ><img src="./assets/icon.svg" width="36" height="36" alt="" /><span
+          >GLOVEBOX<small>GTA V / PS5 FIELD GUIDE</small></span
+        ></a
+      >
+      <span class="edition"><i aria-hidden="true"></i> STORY MODE</span>
+      <nav class="navigation" aria-label="Main navigation">
+        <a href="#/cheats" data-nav="cheats"
+          ><span aria-hidden="true">⌘</span>Cheats</a
+        >
+        <a href="#/stores" data-nav="stores"
+          ><span aria-hidden="true">⌖</span>Stores</a
+        >
+        <a href="#/saved" data-nav="saved"
+          ><span aria-hidden="true">☆</span>Saved</a
+        >
+        <a href="#/guide" data-nav="guide"
+          ><span aria-hidden="true">ⓘ</span>How-to</a
+        >
+      </nav>
+    </header>
+    <div
+      id="storage-warning"
+      class="storage-warning"
+      role="status"
+      hidden
+    ></div>
+    <main id="main" tabindex="-1">
+      <div id="app"><p class="loading">Opening your glovebox…</p></div>
+      <noscript
+        ><p>
+          This guide needs JavaScript for searching, maps and saved items.
+          Enable JavaScript or consult
+          <a
+            href="https://www.gtabase.com/grand-theft-auto-v/gta-5-cheats-ps5-ps4-ps3-cheat-codes"
+            >the published cheat list</a
+          >
+          and
+          <a
+            href="https://www.gosunoob.com/grand-theft-auto-5/gta-5-stores-places-you-can-rob/"
+            >the store map source</a
+          >.
+        </p></noscript
+      >
+    </main>
+    <footer class="site-footer">
+      <span>Source-checked 04 NOV 2026</span
+      ><span>Unofficial · not affiliated with Rockstar Games or Take-Two</span
+      ><a href="#/guide">Sources & limitations ↗</a>
+    </footer>
+    <div
+      id="announcement"
+      class="sr-only"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <div id="toast" class="toast" hidden></div>
+    <dialog id="map-dialog" aria-labelledby="map-title">
+      <div class="dialog-bar">
+        <h2 id="map-title">Map close-up</h2>
+        <button type="button" data-action="close-map">Close ✕</button>
+      </div>
+      <div class="dialog-tools">
+        <button type="button" data-zoom="fit">Fit</button
+        ><button type="button" data-zoom="2">2×</button
+        ><button type="button" data-zoom="3">3×</button
+        ><span>Scroll to pan · pinch to zoom</span>
+      </div>
+      <div id="map-viewport" class="map-viewport"></div>
+    </dialog>
+  </body>
+</html>

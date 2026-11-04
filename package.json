@@ -1,0 +1,11 @@
+{
+  "name": "glovebox-gta-v-ps5-guide",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
