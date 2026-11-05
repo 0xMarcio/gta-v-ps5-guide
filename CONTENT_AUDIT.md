@@ -64,9 +64,12 @@ Suggestions rejected after checking:
 - Spoiler gates and progress-based reveal controls. All mission, ending and unlock information is available immediately.
 - A speculative returning-player-only warning for PS5. The older source descriptions do not establish that restriction for the current version.
 - Changing the five PowerPyx collectible links based on their slugs. All five returned HTTP 200 at the exact published URLs.
+- A later claimed stale stock-selection blocker. The existing `save()` helper already copies the selected mission into the runtime value; direct panel selection and two-tab behavior were checked in the browser.
 
 The trophy wording recommends restarting and loading the clean save before a trophy run. Rockstar also explicitly supports reloading a save or rebooting the console to reset cheats; the stronger claim that reload alone cannot reset them was not adopted.
 
 Validation includes 21 passing automated tests and Chrome interaction checks at phone, tablet and desktop viewport widths (320, 390, 767 and 1440 CSS pixels), plus landscape Big view. Browser checks exercised search destinations, store navigation and image failure/retry, zoom persistence, keyboard counter focus, timer persistence/expiry, wake state, backup/import/undo, migration, cross-tab updates, price calculations and module-load failure. These are browser and source checks, not a claim of physical PS5 or iPhone testing.
 
 The follow-up review also identified shifting cheat categories, map controls moving when zooming, missing timer feedback inside Big view, and a stock-accordion persistence race. Categories now retain their entries alongside pinned/recent shortcuts; the map keeps a constant height; Big view contains its own timer controls; and only user actions change the selected stock plan. Keyboard map panning, repeated Next activation, category return focus, two-tab stock updates and stock-heading visibility were checked in the browser after those changes.
+
+The final focused review identified detached session-bar openers and a missing focus fallback when pinning moves a cheat between shortcut groups. Both received fallback restoration and browser checks. A toast-container issue was independently identified and fixed while that review was running, then checked in the browser. No tests were removed or weakened during these follow-up fixes.

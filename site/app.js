@@ -104,11 +104,14 @@ function cheatRowPosition(row) {
   return row ? { id: row.dataset.cheat, group: row.dataset.group, top: row.getBoundingClientRect().top } : null;
 }
 function restoreCheatRow(position, focus = false) {
-  if (!position) return;
-  const row = document.querySelector(`[data-cheat="${CSS.escape(position.id)}"][data-group="${CSS.escape(position.group)}"]`);
-  if (!row) return;
+  const list = position && document.querySelector("#cheat-rows");
+  if (!list) return false;
+  const id = `[data-cheat="${CSS.escape(position.id)}"]`;
+  const row = list.querySelector(`${id}[data-group="${CSS.escape(position.group)}"]`) || list.querySelector(id);
+  if (!row) return false;
   scrollBy(0, row.getBoundingClientRect().top - position.top);
   if (focus) row.focus({ preventScroll: true });
+  return true;
 }
 function go(hash, replace = false) {
   if (replace) {
@@ -153,9 +156,8 @@ function onRoute() {
     restored = true;
   } else if (previous.view === "cheat" && route.view === "cheats" && cheatReturn?.hash === location.hash) {
     window.scrollTo(0, cheatReturn.y);
-    restoreCheatRow(cheatReturn, true);
+    restored = restoreCheatRow(cheatReturn, true);
     cheatReturn = null;
-    restored = true;
   } else if (sameCheatDesktop) {
     window.scrollTo(0, previousY);
     restoreCheatRow(cheatPosition, true);
@@ -250,17 +252,25 @@ function openSheet(title, html) {
   sheet.showModal();
 }
 function closeDialogs() {
+  returnFocus = document.querySelector("#main");
   if (sheet.open) sheet.close();
   if (big.open) big.close();
 }
+function restoreOpener() {
+  const selector = focusLocator(returnFocus);
+  let target = returnFocus?.isConnected ? returnFocus : selector ? document.querySelector(selector) : null;
+  if (!target?.getClientRects().length) target = document.querySelector("#main");
+  target?.focus({ preventScroll: true });
+}
 sheet.addEventListener("close", () => {
   pendingImport = null;
-  returnFocus?.isConnected && returnFocus.focus({ preventScroll: true });
+  restoreOpener();
 });
 big.addEventListener("close", () => {
   activeBig = null;
   if (wakeFromBig) { wakeFromBig = false; void setWake(false); }
-  returnFocus?.isConnected && returnFocus.focus({ preventScroll: true });
+  updateSession();
+  restoreOpener();
 });
 function showSettings() {
   openSheet(
