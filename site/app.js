@@ -45,6 +45,8 @@ let state = db.state,
   activeMoney = state.activeMoney;
 let storeReturn = null,
   cheatReturn = null,
+  cheatPosition = null,
+  moneyTargetPending = false,
   undoAction = null,
   toastTimeout = null,
   activeBig = null,
@@ -83,7 +85,8 @@ function showWarning() {
 function toast(message, undo = null) {
   clearTimeout(toastTimeout);
   undoAction = undo;
-  const el = document.querySelector("#toast");
+  document.querySelectorAll("#toast, #big-status").forEach((host) => { host.hidden = true; });
+  const el = big.open ? document.querySelector("#big-status") : document.querySelector("#toast");
   el.innerHTML = `<span>${esc(message)}</span>${undo ? '<button data-action="undo">Undo</button>' : ""}`;
   el.hidden = false;
   toastTimeout = setTimeout(
@@ -96,6 +99,16 @@ function toast(message, undo = null) {
 }
 function announce(message) {
   document.querySelector("#announcement").textContent = message;
+}
+function cheatRowPosition(row) {
+  return row ? { id: row.dataset.cheat, group: row.dataset.group, top: row.getBoundingClientRect().top } : null;
+}
+function restoreCheatRow(position, focus = false) {
+  if (!position) return;
+  const row = document.querySelector(`[data-cheat="${CSS.escape(position.id)}"][data-group="${CSS.escape(position.group)}"]`);
+  if (!row) return;
+  scrollBy(0, row.getBoundingClientRect().top - position.top);
+  if (focus) row.focus({ preventScroll: true });
 }
 function go(hash, replace = false) {
   if (replace) {
@@ -140,27 +153,42 @@ function onRoute() {
     restored = true;
   } else if (previous.view === "cheat" && route.view === "cheats" && cheatReturn?.hash === location.hash) {
     window.scrollTo(0, cheatReturn.y);
-    document.querySelector(`[data-cheat="${cheatReturn.id}"]`)?.focus({ preventScroll: true });
+    restoreCheatRow(cheatReturn, true);
     cheatReturn = null;
     restored = true;
-  } else if (sameCheatDesktop) window.scrollTo(0, previousY);
+  } else if (sameCheatDesktop) {
+    window.scrollTo(0, previousY);
+    restoreCheatRow(cheatPosition, true);
+  }
   else if (previous.view !== "store" || route.view !== "store")
     window.scrollTo(0, 0);
-  if (route.view === "store")
-    document.querySelector(".viewer")?.focus({ preventScroll: true });
+  if (route.view === "store") {
+    const viewer = document.querySelector(".viewer");
+    if (!viewer?.contains(document.activeElement)) viewer?.focus({ preventScroll: true });
+    const currentStore = stores.find((s) => s.id === route.id);
+    if (currentStore) announce(`Store ${currentStore.sequence} of 19: ${currentStore.name}, ${currentStore.area}.`);
+  }
   else if (!restored && !sameCheatDesktop)
     document.querySelector("#main").focus({ preventScroll: true });
-  if (route.view === "money" && previous.view !== "money")
+  if (route.view === "money" && moneyTargetPending)
     document.querySelector(`[data-money-accordion="${activeMoney}"]`)?.scrollIntoView({ block: "start" });
+  moneyTargetPending = false;
+  cheatPosition = null;
   if (route.view === "progress" && route.query)
     document.querySelector(`[data-check="${CSS.escape(route.query)}"], [data-count][data-id="${CSS.escape(route.query)}"]`)?.closest(".check-row, .collector")?.scrollIntoView({ block: "center" });
 }
+function focusLocator(element) {
+  const focusAttrs = ["action", "id", "delta", "kind", "count", "check", "money", "setting", "character", "zoom", "cheat", "group"];
+  return element?.id ? `#${CSS.escape(element.id)}` :
+    focusAttrs.filter((key) => element?.dataset[key] !== undefined)
+      .map((key) => `[data-${key}="${CSS.escape(element.dataset[key])}"]`).join("");
+}
 function render(keepPanels = true) {
   const focus = document.activeElement;
-  const focusAttrs = ["action", "id", "delta", "kind", "count", "check", "money", "setting", "character", "zoom", "cheat"];
-  const focusSelector = focus?.id ? `#${CSS.escape(focus.id)}` :
-    focusAttrs.filter((key) => focus?.dataset[key] !== undefined)
-      .map((key) => `[data-${key}="${CSS.escape(focus.dataset[key])}"]`).join("");
+  const focusSelector = focusLocator(focus);
+  const openerSelector = app.contains(returnFocus) ? focusLocator(returnFocus) : null;
+  const listAnchor = keepPanels && matchMedia("(min-width: 701px)").matches
+    ? cheatRowPosition([...app.querySelectorAll("#cheat-rows [data-cheat]")].find((r) => r.getBoundingClientRect().top >= 150 && r.getBoundingClientRect().top < innerHeight)) : null;
   const panelKey = (d) => d.dataset.moneyAccordion || d.querySelector("summary")?.textContent.replace(/\d+\/\d+/g, "");
   const openPanels = keepPanels && renderedView === route.view
     ? [...app.querySelectorAll("details[open]:not([data-money-accordion])")].map(panelKey) : [];
@@ -169,6 +197,7 @@ function render(keepPanels = true) {
   document.body.dataset.view = route.view;
   document.body.classList.toggle("viewer-mode", route.view === "store");
   app.innerHTML = renderView(route, { ...state, activeMoney, cheatBack: cheatReturn?.hash });
+  if (openerSelector) returnFocus = app.querySelector(openerSelector);
   app.querySelectorAll("details").forEach((d) => { if (openPanels.includes(panelKey(d))) d.open = true; });
   renderedView = route.view;
   renderedStore = route.view === "store" ? route.id : null;
@@ -209,6 +238,9 @@ function render(keepPanels = true) {
   updateWakeLabels();
   if (focusSelector && app.contains(focus) === false)
     app.querySelector(focusSelector)?.focus({ preventScroll: true });
+  restoreCheatRow(listAnchor);
+  if (route.view === "store" && document.activeElement === document.body)
+    document.querySelector(".viewer")?.focus({ preventScroll: true });
 }
 function openSheet(title, html) {
   if (sheet.open) sheet.close();
@@ -313,13 +345,14 @@ function showBig(id) {
   activeBig = id;
   const pad = state.method === "pad" && c.buttons;
   const pinned = state.favorites.length > 1;
-  big.innerHTML = `<div class="big-top"><div><div class="label">${c.mnemonic}</div><h2 id="big-title">${esc(c.title)}</h2></div><div class="inline-actions">${c.buttons ? `<button data-action="big-method">${pad ? "Phone" : "Controller"}</button>` : ""}<button data-action="close-big" aria-label="Close big view">✕</button></div></div><div class="big-code">${pad ? padRun(c) : phoneCode(c)}</div><div class="bottom"><div class="inline-actions">${pinned ? '<button data-action="big-prev" aria-label="Previous pinned cheat">← Pin</button><button data-action="big-next" aria-label="Next pinned cheat">Pin →</button>' : ""}${c.id === "invincibility" ? '<button data-action="timer-start">Start 5:00</button>' : ""}<button data-action="wake">Awake <span data-wake-label></span></button></div>${pad ? `<p class="mono">${c.phone}</p>` : "<p>Dial on the in-game phone.</p>"}</div>`;
+  big.innerHTML = `<div class="big-top"><div><div class="label">${c.mnemonic}</div><h2 id="big-title">${esc(c.title)}</h2></div><div class="inline-actions">${c.buttons ? `<button data-action="big-method">${pad ? "Phone" : "Controller"}</button>` : ""}<button data-action="close-big" aria-label="Close big view">✕</button></div></div><div class="big-code">${pad ? padRun(c) : phoneCode(c)}</div><div id="big-reminder" class="big-reminder"></div><div id="big-status" class="big-status" role="status" hidden></div><div class="bottom"><div class="inline-actions">${pinned ? '<button data-action="big-prev" aria-label="Previous pinned cheat">← Pin</button><button data-action="big-next" aria-label="Next pinned cheat">Pin →</button>' : ""}<button data-action="wake">Awake <span data-wake-label></span></button></div>${pad ? `<p class="mono">${c.phone}</p>` : "<p>Dial on the in-game phone.</p>"}</div>`;
   if (opening) {
     big.showModal();
     if ("wakeLock" in navigator && !wakeWanted) { wakeFromBig = true; void setWake(true); }
   } else if (focusedAction)
     big.querySelector(`[data-action="${focusedAction}"]`)?.focus();
   updateWakeLabels();
+  updateSession();
 }
 function download(text, name, type = "application/json") {
   const blob = new Blob([text], { type }),
@@ -430,6 +463,7 @@ function updateSession() {
   );
   const seconds = Math.ceil(remainingTime(t) / 1000),
     clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  updateBigTimer(t, clock);
   const sessionKey = [
     t?.status || "",
     wakeWanted,
@@ -451,6 +485,22 @@ function updateSession() {
     panel
       .querySelector(`[data-action="${focusedAction}"]`)
       ?.focus({ preventScroll: true });
+}
+function updateBigTimer(timer, clock) {
+  const host = big.querySelector("#big-reminder");
+  if (!big.open || !host) return;
+  const status = timer?.status || "off";
+  if (host.dataset.status !== status) {
+    const action = host.contains(document.activeElement) ? document.activeElement.dataset.action : null;
+    host.dataset.status = status;
+    host.innerHTML = timer
+      ? `<span class="meta">Invincibility reminder</span><strong class="big-time mono"></strong><button data-action="timer-pause">${status === "running" ? "Pause" : status === "expired" ? "Restart 5:00" : "Resume"}</button><button data-action="timer-stop">Stop</button>`
+      : activeBig === "invincibility" ? '<button data-action="timer-start">Start 5:00 reminder</button>' : "";
+    host.hidden = !timer && activeBig !== "invincibility";
+    if (action) (host.querySelector(`[data-action="${action}"]`) || host.querySelector("button") || big.querySelector('[data-action="close-big"]'))?.focus({ preventScroll: true });
+  }
+  const value = host.querySelector(".big-time");
+  if (value) value.textContent = status === "expired" ? "Expired" : clock;
 }
 setInterval(() => {
   if (state.timer) updateSession();
@@ -637,10 +687,17 @@ function updateQuery(key, value) {
   save({ ...state, lastRoute: location.hash }, false);
 }
 document.addEventListener("click", async (e) => {
+  const moneySummary = e.target.closest("[data-money-accordion] > summary");
+  if (moneySummary && !moneySummary.parentElement.open) {
+    change((s) => { s.activeMoney = moneySummary.parentElement.dataset.moneyAccordion; });
+    const picker = document.querySelector("#money-jump");
+    if (picker) picker.value = activeMoney;
+  }
   const anchor = e.target.closest("a[href]");
   if (anchor) {
     if (anchor.dataset.cheat) {
-      if (route.view === "cheats") cheatReturn = { hash: location.hash, y: scrollY, id: anchor.dataset.cheat };
+      cheatPosition = cheatRowPosition(anchor);
+      if (route.view === "cheats") cheatReturn = { hash: location.hash, y: scrollY, ...cheatPosition };
       else if (route.view === "cheat") {
         e.preventDefault();
         go(anchor.getAttribute("href"), true);
@@ -653,6 +710,7 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (anchor.dataset.moneyTarget) {
+      moneyTargetPending = true;
       activeMoney = anchor.dataset.moneyTarget;
       change((s) => {
         s.activeMoney = activeMoney;
@@ -685,6 +743,7 @@ document.addEventListener("click", async (e) => {
           document
             .querySelector(`[data-money-accordion="${activeMoney}"]`)
             ?.scrollIntoView({ block: "start" });
+        moneyTargetPending = false;
       }
     }
   }
@@ -1022,21 +1081,6 @@ document.addEventListener("input", (e) => {
     );
   }
 });
-document.addEventListener(
-  "toggle",
-  (e) => {
-    if (e.target.matches?.("[data-money-accordion]") && e.target.open) {
-      activeMoney = e.target.dataset.moneyAccordion;
-      if (state.activeMoney !== activeMoney)
-        change((s) => {
-          s.activeMoney = activeMoney;
-        }, false);
-      const picker = document.querySelector("#money-jump");
-      if (picker) picker.value = activeMoney;
-    }
-  },
-  true,
-);
 document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const typing = e.target.matches("input,textarea,select,[contenteditable]");
@@ -1054,6 +1098,7 @@ document.addEventListener("keydown", (e) => {
   if (sheet.open || big.open) return;
   if (route.view === "store" && document.querySelector(".viewer")?.contains(e.target)) {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      if (zoom > 1 && e.target.closest("#map-stage")) return;
       e.preventDefault();
       go(
         `#/store/${nextStore(route.id, state.stores, false, e.key === "ArrowLeft" ? -1 : 1)}`,

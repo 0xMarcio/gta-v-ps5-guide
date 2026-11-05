@@ -94,8 +94,8 @@ export function padRun(c) {
 }
 export const phoneCode = (c) =>
   `<div class="phone-code" aria-label="Phone code ${c.phone}"><span class="prefix">1-999-</span>${esc(c.phone.slice(6))}</div><div class="mnemonic">${esc(c.mnemonic)}</div>`;
-export function cheatRow(c, state, selected = false, query = "") {
-  return `<a class="row ${selected ? "selected" : ""}" href="#/cheat/${c.id}${query}" data-cheat="${c.id}"><span class="grow"><span class="row-title">${state.favorites.includes(c.id) ? '<span class="star" aria-label="Pinned">★</span> ' : ""}${esc(c.title)}</span><small>${esc(c.effect)}</small></span><span class="${chooseMethod(c, state.method) === "phone" ? "digits" : "meta"}">${chooseMethod(c, state.method) === "phone" ? esc(c.phone.slice(6)) : `${c.buttons.length} inputs ›`}</span></a>`;
+export function cheatRow(c, state, selected = false, query = "", group = "shortcut") {
+  return `<a class="row ${selected ? "selected" : ""}" href="#/cheat/${c.id}${query}" data-cheat="${c.id}" data-group="${esc(group)}"><span class="grow"><span class="row-title">${state.favorites.includes(c.id) ? '<span class="star" aria-label="Pinned">★</span> ' : ""}${esc(c.title)}</span><small>${esc(c.effect)}</small></span><span class="${chooseMethod(c, state.method) === "phone" ? "digits" : "meta"}">${chooseMethod(c, state.method) === "phone" ? esc(c.phone.slice(6)) : `${c.buttons.length} inputs ›`}</span></a>`;
 }
 export function cheatDetail(c, state) {
   const phone = `<div class="code-block"><div class="label">In-game phone</div>${phoneCode(c)}</div>`,
@@ -113,13 +113,11 @@ export function cheatsView(route, state) {
   else if (titles[route.category])
     list = list.filter((c) => c.category === route.category);
   const groups = [];
-  const used = new Set();
-  const add = (title, items) => {
-    const rows = items.filter((c) => list.includes(c) && !used.has(c.id));
+  const add = (title, items, group) => {
+    const rows = items.filter((c) => list.includes(c));
     if (rows.length) {
-      rows.forEach((c) => used.add(c.id));
       groups.push(
-        `<div class="section-label">${title}</div>${rows.map((c) => cheatRow(c, state, current?.id === c.id, "?" + new URLSearchParams({ c: route.category || "all", q: route.query || "" }))).join("")}`,
+        `<div class="section-label">${title}</div>${rows.map((c) => cheatRow(c, state, current?.id === c.id, "?" + new URLSearchParams({ c: route.category || "all", q: route.query || "" }), group)).join("")}`,
       );
     }
   };
@@ -127,22 +125,26 @@ export function cheatsView(route, state) {
     add(
       "Pinned",
       state.favorites.map((id) => cheats.find((c) => c.id === id)),
+      "pinned",
     );
     add(
       "Recent",
-      state.recent.map((id) => cheats.find((c) => c.id === id)),
+      state.recent.filter((id) => !state.favorites.includes(id)).map((id) => cheats.find((c) => c.id === id)),
+      "recent",
     );
   }
   if (route.query || route.category === "saved")
     add(
       `${list.length} ${route.category === "saved" ? "pinned cheats" : "matches"}`,
       list,
+      "results",
     );
   else
     for (const [id, title] of Object.entries(titles))
       add(
         title,
         cheats.filter((c) => c.category === id),
+        id,
       );
   const detail =
     current ||
@@ -258,7 +260,7 @@ export function storesView(route, state) {
 export function storeView(route, state) {
   const s = stores.find((s) => s.id === route.id);
   if (!s) return missing();
-  return `<section class="viewer" tabindex="-1" aria-label="Store ${s.sequence} of 19, ${esc(s.name)}, ${state.stores.includes(s.id) ? "checked" : "not checked"}"><div class="viewer-top"><a href="#/stores" data-back-stores>← Stores</a><span class="mono">${String(s.sequence).padStart(2, "0")} / 19 · ${s.id}</span><button data-action="pick-store">Jump to…</button></div><div class="map-stage" id="map-stage" tabindex="0" aria-label="Store map; scroll to pan when zoomed"><div class="map-loading" id="map-loading">Loading original close-up…</div><img id="store-image" src="${s.image}" width="${s.width}" height="${s.height}" alt="${esc(s.name)} in ${esc(s.area)}: original in-game map close-up ${s.sequence}, marker ${s.id}"/></div><div id="map-changed" class="warning" hidden>Image dimensions changed at the publisher. Check the original source.</div><div class="viewer-caption"><div><h1>${esc(s.name)} · ${esc(s.area)}</h1><p class="muted">${esc(s.street)}</p></div><button data-action="store-toggle" data-id="${s.id}" aria-pressed="${state.stores.includes(s.id)}">${state.stores.includes(s.id) ? "✓ Checked" : "Mark checked"}</button></div><div class="viewer-controls"><button data-action="store-prev" aria-label="Previous store">←</button><button class="primary" data-action="store-next-undone">${state.stores.length === 19 ? "All 19 checked" : "Done & next"}</button><button data-action="store-next" aria-label="Next store">→</button></div><nav class="place-jumps" aria-label="Jump to store">${stores.map((place) => `<button data-action="store-jump" data-id="${place.id}" ${place.id === s.id ? 'aria-current="location"' : ''} class="${state.stores.includes(place.id) ? 'done' : ''}" aria-label="Store ${place.sequence}, ${esc(place.area)}, ${state.stores.includes(place.id) ? 'checked' : 'not checked'}">${place.sequence}${state.stores.includes(place.id) ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</nav><div class="viewer-meta"><span>${state.stores.length} checked · ${19 - state.stores.length} left</span><div class="inline-actions"><button data-zoom="1" aria-pressed="true">Fit</button><button data-zoom="2" aria-pressed="false">2×</button><button data-zoom="3" aria-pressed="false">3×</button></div><span>${external(s.image, "Original")} · ${sourceButton(["fictionhorizon", "gosunoob"])}</span></div>${s.note ? `<p class="meta">${esc(s.note)}</p>` : ""}<p class="meta">Scroll to pan when zoomed. Pinch uses browser zoom. <span class="desktop-only">Keys: ← / → · D to check · + / − to zoom · 0 to fit.</span></p></section>`;
+  return `<section class="viewer" id="store-viewer" tabindex="-1" aria-label="Store ${s.sequence} of 19, ${esc(s.name)}, ${state.stores.includes(s.id) ? "checked" : "not checked"}"><div class="viewer-top"><a href="#/stores" data-back-stores>← Stores</a><span class="mono">${String(s.sequence).padStart(2, "0")} / 19 · ${s.id}</span><button data-action="pick-store">Jump to…</button></div><div class="map-stage" id="map-stage" tabindex="0" aria-label="Store map; scroll to pan when zoomed"><div class="map-loading" id="map-loading">Loading original close-up…</div><img id="store-image" src="${s.image}" width="${s.width}" height="${s.height}" alt="${esc(s.name)} in ${esc(s.area)}: original in-game map close-up ${s.sequence}, marker ${s.id}"/></div><div id="map-changed" class="warning" hidden>Image dimensions changed at the publisher. Check the original source.</div><div class="viewer-caption"><div><h1>${esc(s.name)} · ${esc(s.area)}</h1><p class="muted">${esc(s.street)}</p></div><button data-action="store-toggle" data-id="${s.id}" aria-pressed="${state.stores.includes(s.id)}">${state.stores.includes(s.id) ? "✓ Checked" : "Mark checked"}</button></div><div class="viewer-controls"><button data-action="store-prev" aria-label="Previous store">←</button><button class="primary" data-action="store-next-undone">${state.stores.length === 19 ? "All 19 checked" : "Done & next"}</button><button data-action="store-next" aria-label="Next store">→</button></div><nav class="place-jumps" aria-label="Jump to store">${stores.map((place) => `<button data-action="store-jump" data-id="${place.id}" ${place.id === s.id ? 'aria-current="location"' : ''} class="${state.stores.includes(place.id) ? 'done' : ''}" aria-label="Store ${place.sequence}, ${esc(place.area)}, ${state.stores.includes(place.id) ? 'checked' : 'not checked'}">${place.sequence}${state.stores.includes(place.id) ? '<span aria-hidden="true">✓</span>' : ''}</button>`).join('')}</nav><div class="viewer-meta"><span>${state.stores.length} checked · ${19 - state.stores.length} left</span><div class="inline-actions"><button data-zoom="1" aria-pressed="true">Fit</button><button data-zoom="2" aria-pressed="false">2×</button><button data-zoom="3" aria-pressed="false">3×</button></div><span>${external(s.image, "Original")} · ${sourceButton(["fictionhorizon", "gosunoob"])}</span></div>${s.note ? `<p class="meta">${esc(s.note)}</p>` : ""}<p class="meta">Scroll to pan when zoomed. Pinch uses browser zoom. <span class="desktop-only">Keys: ← / → · D to check · + / − to zoom · 0 to fit.</span></p></section>`;
 }
 function stockLabel(s) {
   return `<span class="stock">${s[0]} <span class="mono">${s[1]}</span></span><span class="meta">${s[2]}</span>`;
@@ -297,6 +299,7 @@ export function crewView(state, query = "") {
       "Approach, role and cut—without digging through a walkthrough.",
     ) +
     subnav("crews") +
+    (query ? `<p class="filter-note">Showing “${esc(query)}” · <a href="#/crews">All heist crews →</a></p>` : "") +
     `<div class="note-box"><p>Recruit Packie and Taliana before you need them. Crew availability and experience depend on earlier choices.</p><a href="#/play?q=recruit">Recruitment locations →</a></div>${searchItems(crews, query).map((c) => `<section class="tip"><div class="label">${c.approach}</div><h2>${c.title}</h2><table class="crew-table"><caption class="sr-only">${c.title} crew</caption><tbody>${c.rows.map(([role, name, cut]) => `<tr><th scope="row">${role}</th><td>${name}</td><td>${cut}</td></tr>`).join("")}</tbody></table><p>${c.note}</p>${sourceButton(c.sources)}</section>`).join("")}`
   );
 }

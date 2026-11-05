@@ -36,6 +36,8 @@ Only Hotel is mandatory for story progression. The other four are best saved for
 
 Crew sources: [Jewel Store planning](https://www.gtabase.com/grand-theft-auto-v/missions/casing-the-jewel-store), [Paleto planning](https://www.gtabase.com/grand-theft-auto-v/missions/paleto-score-setup), [Bureau planning](https://www.gtabase.com/grand-theft-auto-v/missions/architect-s-plans), [Big Score planning](https://www.gtabase.com/grand-theft-auto-v/missions/planning-the-big-score). Role assignment matters: Taliana in the helicopter, inexperienced Karim on the train. Earlier casualties and recruitment affect availability.
 
+Paleto explicitly compares Norm’s 10.5% casualty expense with the surviving 12% Packie/Chef choice. The table does not present the surviving crew as the cheapest option. The towing property’s Davis / Innocence Boulevard address follows its dedicated GTA Base property page rather than PowerPyx’s broader Rancho label.
+
 ## Completion and activities
 
 [GTA Base’s 100% guide](https://www.gtabase.com/grand-theft-auto-v/guides/gta-5-100-completion-guide-checklist) supplies the five totals/weights: 69 story (55%), 20 Strangers & Freaks (10%), 42 hobbies (10%), 14 random events (5%), 16 miscellaneous (20%). Some other guides use different weight headings; the UI consistently follows GTA Base.
@@ -66,3 +68,5 @@ Suggestions rejected after checking:
 The trophy wording recommends restarting and loading the clean save before a trophy run. Rockstar also explicitly supports reloading a save or rebooting the console to reset cheats; the stronger claim that reload alone cannot reset them was not adopted.
 
 Validation includes 21 passing automated tests and Chrome interaction checks at phone, tablet and desktop viewport widths (320, 390, 767 and 1440 CSS pixels), plus landscape Big view. Browser checks exercised search destinations, store navigation and image failure/retry, zoom persistence, keyboard counter focus, timer persistence/expiry, wake state, backup/import/undo, migration, cross-tab updates, price calculations and module-load failure. These are browser and source checks, not a claim of physical PS5 or iPhone testing.
+
+The follow-up review also identified shifting cheat categories, map controls moving when zooming, missing timer feedback inside Big view, and a stock-accordion persistence race. Categories now retain their entries alongside pinned/recent shortcuts; the map keeps a constant height; Big view contains its own timer controls; and only user actions change the selected stock plan. Keyboard map panning, repeated Next activation, category return focus, two-tab stock updates and stock-heading visibility were checked in the browser after those changes.

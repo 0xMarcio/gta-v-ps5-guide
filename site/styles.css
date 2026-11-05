@@ -654,7 +654,7 @@ main:focus {
 }
 .segbar.continuous { gap: 0; }
 .place-jumps { display: flex; overflow-x: auto; gap: 4px; margin: 12px 0; padding-bottom: 4px; }
-.place-jumps button { min-width: 44px; min-height: 48px; padding: 4px; flex: 0 0 44px; font-family: var(--mono); }
+.place-jumps button { min-width: 44px; min-height: 48px; padding: 4px; flex: 0 0 44px; font-family: "Overpass Mono", monospace; }
 .place-jumps button span { display: block; font-size: 10px; line-height: 1; }
 .place-jumps button.done { background: var(--raise); }
 .place-jumps button[aria-current] { border-color: var(--accent); color: var(--accent); }
@@ -1867,7 +1867,6 @@ dialog::backdrop {
     min-height: 0;
     aspect-ratio: 16 / 9;
   }
-  .map-stage.zoom-2, .map-stage.zoom-3 { height: 48dvh; min-height: 220px; aspect-ratio: auto; }
   .viewer-caption {
     display: flex;
     gap: 8px;
@@ -1889,3 +1888,9 @@ dialog::backdrop {
 body[data-view="money"] .toolbar:has(#money-jump) { position: sticky; top: 72px; z-index: 10; background: var(--bg); padding: 8px 0; }
 #money-jump { max-width: 600px; }
 @media(max-width:700px) { body[data-view="money"] .toolbar:has(#money-jump) { top: 52px; } #money-jump { max-width: none; min-width: 0; } }
+
+[data-money-accordion] { scroll-margin-top: 72px; }
+.big-reminder { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; flex-shrink: 0; }
+.big-reminder .big-time { font-size: 24px; }
+.big-status { padding: 8px; color: var(--ink); border-top: 1px solid var(--line); font-size: 13px; text-align: center; }
+@media (max-height: 500px) and (orientation: landscape) { .big-reminder { padding: 0; } .big-reminder button { min-height: 40px; padding: 4px 12px; } }

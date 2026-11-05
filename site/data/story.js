@@ -109,9 +109,9 @@ export const crews = [
   {
     id: "paleto",
     title: "The Paleto Score",
-    approach: "Reliable gunman",
-    rows: [["Gunman", "Packie McReary or Chef", "12%"]],
-    note: "A skilled gunman is the straightforward choice for keeping the crew and loot safe. Gustavo Mota (14%) also works. The cheapest gunmen carry a casualty and dropped-money risk.",
+    approach: "Cost versus survival",
+    rows: [["Lower crew expense", "Norm Richards · dies", "10.5%"], ["Surviving gunman", "Packie McReary or Chef", "12%"]],
+    note: "GTA Base recommends Norm’s 10.5% casualty expense and saving Daryl for The Big Score. Packie or Chef costs 1.5 percentage points more and survives to help in the firefight. Gustavo Mota is another surviving option at 14%.",
     sources: ["paleto"],
   },
   {
@@ -142,7 +142,7 @@ export const crews = [
 export const properties = [
   ["hen-house", "The Hen House", 80000, "Any", "Paleto Bay"],
   ["mckenzie", "McKenzie Field Hangar", 150000, "Trevor", "Grapeseed"],
-  ["towing", "Towing Impound", 150000, "Franklin", "Rancho"],
+  ["towing", "Towing Impound", 150000, "Franklin", "Davis · Innocence Boulevard"],
   ["cab", "Downtown Cab Co.", 200000, "Franklin", "Downtown"],
   ["smoke", "Smoke on the Water", 204000, "Franklin", "Vespucci Beach"],
   ["sonar", "Sonar Collections Dock", 250000, "Any", "Paleto Bay"],
