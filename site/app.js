@@ -1,300 +1,189 @@
 import { cheats } from "./data/cheats.js";
-import { stores, overview } from "./data/stores.js";
-import { sources, checked } from "./data/sources.js";
+import { stores } from "./data/stores.js";
+import { sources } from "./data/sources.js";
 import {
-  parseRoute,
-  routeURL,
-  searchItems,
-  chooseMethod,
+  assassinations,
+  properties,
+  completionCategories,
+  collectibles,
+  playbook,
+  crews,
+  hobbies,
+  miscellaneous,
+} from "./data/story.js";
+import { wildlife, missionGuides } from "./data/lists.js";
+import {
   createStorage,
   sanitizeState,
   STORAGE_KEY,
+  parseRoute,
+  searchItems,
+  nextStore,
+  remainingTime,
+  calculateTrade,
+  completionPercent,
+  toggle,
+  characters,
 } from "./core.js";
-
-const $ = (selector) => document.querySelector(selector);
-const escape = (value) =>
-  String(value).replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        char
-      ],
-  );
-const external = (url, label) =>
-  `<a href="${escape(url)}" target="_blank" rel="noopener">${label} <span aria-hidden="true">↗</span></a>`;
-const sourceLinks = (ids) =>
-  ids
-    .map((id) => external(sources[id].url, escape(sources[id].name)))
-    .join('<span aria-hidden="true"> / </span>');
-const categoryNames = {
-  quick: "Quick picks",
-  all: "All",
-  vehicles: "Vehicles",
-  player: "Player",
-  combat: "Combat",
-  world: "World",
-  wanted: "Wanted",
-  extras: "Extras",
-};
-const storeRegionNames = {
-  all: "All areas",
-  city: "Los Santos",
-  west: "West coast & hills",
-  north: "Desert & north",
-  east: "East coast",
-};
-const buttons = {
-  cross: ["×", "Cross"],
-  circle: ["○", "Circle"],
-  square: ["□", "Square"],
-  triangle: ["△", "Triangle"],
-  left: ["←", "Left"],
-  right: ["→", "Right"],
-  up: ["↑", "Up"],
-  down: ["↓", "Down"],
-  l1: ["L1", "L1"],
-  l2: ["L2", "L2"],
-  r1: ["R1", "R1"],
-  r2: ["R2", "R2"],
-};
-const storage = createStorage(
-  () => window.localStorage,
-  cheats.map((c) => c.id),
-  stores.map((s) => s.id),
-);
-let state = storage.state;
-let route = parseRoute(location.hash) || {
-  view: "cheats",
-  category: "quick",
-  query: "",
-};
-let cheatListRoute = { view: "cheats", category: "quick", query: "" };
-let storeListRoute = {
-  view: "stores",
-  query: "",
-  filter: "all",
-  region: "all",
-};
-let noticeTimer, announceTimer;
-const listPositions = new Map();
-function listKey(r) {
-  if (r.view === "cheats")
-    return routeURL("cheats", { c: r.category || "quick", q: r.query || "" });
-  if (r.view === "stores")
-    return routeURL("stores", {
-      q: r.query || "",
-      f: r.filter || "all",
-      r: r.region || "all",
-    });
-  return r.view === "saved" ? "#/saved" : null;
+import {
+  esc,
+  external,
+  renderView,
+  sourcesHTML,
+  storeList,
+  missionRows,
+  padRun,
+  phoneCode,
+  moneyFormat,
+} from "./views.js";
+const app = document.querySelector("#app"),
+  sheet = document.querySelector("#sheet"),
+  big = document.querySelector("#big");
+const db = createStorage(() => localStorage);
+let state = db.state,
+  route = parseRoute(location.hash) || { view: "play" },
+  activeMoney = state.activeMoney;
+let storeReturn = null,
+  cheatReturn = null,
+  undoAction = null,
+  toastTimeout = null,
+  activeBig = null,
+  returnFocus = null,
+  zoom = 1,
+  priceCharacter = "M",
+  priceMission = null,
+  pendingImport = null;
+let lastSessionKey = "";
+let renderedView = null, renderedStore = null, wakeFromBig = false;
+let wakeWanted = false,
+  wakeSentinel = null,
+  wakePending = false,
+  wakeError = "";
+const names = { M: "Michael", F: "Franklin", T: "Trevor" };
+if (!location.hash || location.hash === "#")
+  history.replaceState(null, "", state.lastRoute);
+route = parseRoute(location.hash) || { view: "play" };
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+function save(next, changed = true) {
+  state = db.save({ ...next, changes: next.changes + (changed ? 1 : 0) });
+  activeMoney = state.activeMoney;
+  showWarning();
 }
-
+function change(fn, renderAfter = false) {
+  const next = structuredClone(state);
+  fn(next);
+  save(next);
+  if (renderAfter) render();
+}
+function showWarning() {
+  const el = document.querySelector("#storage-warning");
+  el.textContent = db.warning;
+  el.hidden = !db.warning;
+}
+function toast(message, undo = null) {
+  clearTimeout(toastTimeout);
+  undoAction = undo;
+  const el = document.querySelector("#toast");
+  el.innerHTML = `<span>${esc(message)}</span>${undo ? '<button data-action="undo">Undo</button>' : ""}`;
+  el.hidden = false;
+  toastTimeout = setTimeout(
+    () => {
+      el.hidden = true;
+      undoAction = null;
+    },
+    undo ? 8000 : 5000,
+  );
+}
 function announce(message) {
-  clearTimeout(announceTimer);
-  announceTimer = setTimeout(() => {
-    $("#announcement").textContent = message;
-  }, 150);
+  document.querySelector("#announcement").textContent = message;
 }
-function toast(message) {
-  clearTimeout(noticeTimer);
-  $("#toast").textContent = message;
-  $("#toast").hidden = false;
-  announce(message);
-  noticeTimer = setTimeout(() => {
-    $("#toast").hidden = true;
-  }, 3500);
+function go(hash, replace = false) {
+  if (replace) {
+    history.replaceState(null, "", hash);
+    onRoute();
+  } else if (location.hash === hash) onRoute();
+  else location.hash = hash;
 }
-function persist() {
-  storage.save(state);
-  showStorageWarning();
-}
-function showStorageWarning() {
-  $("#storage-warning").hidden = !storage.warning;
-  if ($("#storage-warning").textContent !== storage.warning)
-    $("#storage-warning").textContent = storage.warning;
-}
-function methodSwitch() {
-  return `<fieldset class="method-switch"><legend class="sr-only">Input method</legend>${[
-    ["phone", "Phone"],
-    ["pad", "Controller"],
-  ]
-    .map(
-      ([id, text]) =>
-        `<label><input type="radio" name="method" value="${id}" ${state.method === id ? "checked" : ""}><span>${text}</span></label>`,
-    )
-    .join("")}</fieldset>`;
-}
-function favoriteButton(cheat) {
-  return `<button class="favorite" data-favorite="${cheat.id}" aria-label="Save ${escape(cheat.title)}" aria-pressed="${state.favorites.includes(cheat.id)}"><span aria-hidden="true">${state.favorites.includes(cheat.id) ? "★" : "☆"}</span></button>`;
-}
-function smallInput(cheat) {
-  const method = chooseMethod(cheat, state.method);
-  if (method === "phone")
-    return `<span class="mini-phone">${cheat.phone}</span>${state.method === "pad" ? '<span class="tiny">Phone input</span>' : ""}`;
-  return `<span class="mini-sequence"><span class="sr-only">${cheat.buttons.map((key) => buttons[key][1]).join(", ")}</span>${cheat.buttons.map((key) => `<span class="key-${key}" aria-hidden="true">${buttons[key][0]}</span>`).join("")}</span>${state.method === "phone" ? '<span class="tiny">Controller input · phone disputed</span>' : ""}`;
-}
-function cheatRows(items, activeId) {
-  return items
-    .map(
-      (cheat) =>
-        `<article class="cheat-row ${cheat.id === activeId ? "selected" : ""}"><a class="row-link" href="#/cheat/${cheat.id}"><span class="row-top"><span class="row-title">${escape(cheat.title)}</span>${cheat.unlock ? '<span class="tag">Unlock first</span>' : ""}</span>${smallInput(cheat)}${cheat.dispute ? '<span class="source-flag">Sources differ</span>' : ""}</a>${favoriteButton(cheat)}</article>`,
-    )
-    .join("");
-}
-function filteredCheats() {
-  const r = cheatListRoute;
-  // Searching always covers the full list, even from Quick picks.
-  const pool = r.query
-    ? cheats
-    : cheats.filter(
-        (c) =>
-          r.category === "all" ||
-          (r.category === "quick" ? c.quick : c.category === r.category),
+function onRoute() {
+  const parsed = parseRoute(location.hash);
+  if (!parsed) return;
+  const previous = route;
+  route = parsed;
+  const sameCheatDesktop = matchMedia("(min-width: 701px)").matches &&
+    ["cheat", "cheats"].includes(previous.view) && route.view === "cheat";
+  const previousY = scrollY;
+  if (!["store", "stores"].includes(route.view)) storeReturn = null;
+  if (route.view === "store" && !["store", "stores"].includes(previous.view))
+    storeReturn = null;
+  if (!["cheat", "cheats"].includes(route.view)) cheatReturn = null;
+  closeDialogs();
+  if (route.view === "cheat" && cheats.some((c) => c.id === route.id))
+    change((s) => {
+      s.recent = [route.id, ...s.recent.filter((id) => id !== route.id)].slice(
+        0,
+        3,
       );
-  return searchItems(pool, r.query || "");
+    }, false);
+  if (route.view === "store" && stores.some((s) => s.id === route.id))
+    change((s) => {
+      s.lastStore = route.id;
+    }, false);
+  save({ ...state, lastRoute: location.hash }, false);
+  render(false);
+  let restored = false;
+  if (previous.view === "store" && route.view === "stores" && storeReturn?.hash === location.hash) {
+    window.scrollTo(0, storeReturn.y);
+    document
+      .querySelector(`[data-store="${storeReturn.id}"]`)
+      ?.focus({ preventScroll: true });
+    storeReturn = null;
+    restored = true;
+  } else if (previous.view === "cheat" && route.view === "cheats" && cheatReturn?.hash === location.hash) {
+    window.scrollTo(0, cheatReturn.y);
+    document.querySelector(`[data-cheat="${cheatReturn.id}"]`)?.focus({ preventScroll: true });
+    cheatReturn = null;
+    restored = true;
+  } else if (sameCheatDesktop) window.scrollTo(0, previousY);
+  else if (previous.view !== "store" || route.view !== "store")
+    window.scrollTo(0, 0);
+  if (route.view === "store")
+    document.querySelector(".viewer")?.focus({ preventScroll: true });
+  else if (!restored && !sameCheatDesktop)
+    document.querySelector("#main").focus({ preventScroll: true });
+  if (route.view === "money" && previous.view !== "money")
+    document.querySelector(`[data-money-accordion="${activeMoney}"]`)?.scrollIntoView({ block: "start" });
+  if (route.view === "progress" && route.query)
+    document.querySelector(`[data-check="${CSS.escape(route.query)}"], [data-count][data-id="${CSS.escape(route.query)}"]`)?.closest(".check-row, .collector")?.scrollIntoView({ block: "center" });
 }
-function cheatListContent(activeId) {
-  const list = filteredCheats();
-  const query = cheatListRoute.query || "";
-  const missing = /money|cash|tank|jet/i.test(query)
-    ? `<aside class="note"><strong>No built-in ${/money|cash/i.test(query) ? "money" : "tank or jet spawn"} cheat.</strong> These are not hidden unlocks. See ${sourceLinks(["gtabase"])}.</aside>`
-    : "";
-  return `<div class="list-meta"><span>${list.length} ${query ? "matches · searching all cheats" : "cheats & extras"}</span><span>PS4 / PS5 inputs</span></div>${missing}${list.length ? cheatRows(list, activeId) : `<div class="empty"><h2>No matching cheats</h2><p>Nothing matched “${escape(query)}”. Try a vehicle, effect or code word.</p><button data-action="clear-cheat-search">Clear search</button></div>`}`;
-}
-function cheatDetail(cheat, standalone) {
-  const method = chooseMethod(cheat, state.method);
-  const fallback =
-    method !== state.method
-      ? `<div class="note">${cheat.dispute ? "Using the agreed " + (method === "pad" ? "controller sequence" : "phone number") + " because the other method is disputed." : "This entry is phone-only."}</div>`
-      : "";
-  const input =
-    method === "phone"
-      ? `<div class="phone-block"><span class="eyebrow">DIAL ON THE IN-GAME PHONE</span><div class="phone-number" id="phone-number" tabindex="-1" role="group" aria-label="Phone number ${cheat.phone}">${cheat.phone
-          .split("-")
-          .map(
-            (group, i, groups) =>
-              `<span class="${i < 2 ? "prefix" : ""}">${group}${i < groups.length - 1 ? '<span class="hyphen">-</span>' : ""}</span>`,
-          )
-          .join(
-            "",
-          )}</div><div class="phone-actions"><button class="primary" data-copy="${cheat.id}">Copy number <span aria-hidden="true">⧉</span></button><span class="mono">${cheat.mnemonic}</span></div><p class="tiny">Copying is a reference aid. Enter the number manually in GTA V.</p></div>`
-      : `<div class="pad-block"><div class="input-label"><span class="eyebrow">ENTER LEFT TO RIGHT, ROW BY ROW</span><span class="tiny">${cheat.buttons.length} inputs</span></div><ol class="sequence" role="list">${cheat.buttons.map((key, i) => `<li class="input-tile key-${key}"><span class="sr-only">Step ${i + 1}:</span><span class="step" aria-hidden="true">${String(i + 1).padStart(2, "0")}</span><span class="glyph" aria-hidden="true">${buttons[key][0]}</span><span class="key-name">${buttons[key][1]}</span></li>`).join("")}</ol><p class="tiny">Arrows = D-pad. Cross = the × button. Enter during gameplay, with the pause menu closed.</p></div>`;
-  return `<section class="detail-panel" aria-label="Cheat details"><div class="detail-toolbar"><a class="back-link" href="${routeURL("cheats", { c: cheatListRoute.category, q: cheatListRoute.query })}">← All cheats</a>${favoriteButton(cheat)}</div><div class="detail-heading"><span class="eyebrow">${escape(categoryNames[cheat.category])} / ${cheat.unlock ? "UNLOCK REQUIRED" : "STORY MODE"}</span><${standalone ? "h1" : "h2"} tabindex="-1">${escape(cheat.title)}</${standalone ? "h1" : "h2"}><p>${escape(cheat.effect)}</p><a class="save-reminder" href="#/guide">Cheats temporarily disable trophies. Save first →</a></div>${cheat.unlock ? `<div class="unlock"><span aria-hidden="true">◇</span><div><strong>Unlock this vehicle first</strong><p>${escape(cheat.note)}</p></div></div>` : ""}${fallback}${input}${!cheat.unlock && cheat.note ? `<p class="usage-note">${escape(cheat.note)}</p>` : ""}${cheat.dispute ? `<details class="source-note"><summary>Why an input is withheld</summary><p>${escape(cheat.dispute)}</p></details>` : ""}<div class="entry-sources"><span class="eyebrow">CHECK THE SOURCES</span><div>${sourceLinks(cheat.sources)}</div><p>Source-checked ${checked} · not tested on a PS5.</p></div><a class="text-link" href="#/guide">How to enter cheats & protect a clean save →</a></section>`;
-}
-function cheatsView() {
-  const standalone = route.view === "cheat";
-  if (!standalone) cheatListRoute = { ...route };
-  const selected = standalone
-    ? cheats.find((c) => c.id === route.id)
-    : filteredCheats()[0];
-  if (standalone && !selected) return missingView();
-  return `<div class="view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">LOS SANTOS, AT YOUR FINGERTIPS</span><h1 tabindex="-1">Cheat sheet<span class="heading-count">${cheats.length}</span></h1><p>Phone numbers. PlayStation inputs. Straight to the good stuff.</p></div><a class="help-link" href="#/guide">Story Mode only<br><span>Save before using cheats →</span></a></div><div class="workspace"><section class="master" aria-label="Find a cheat"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="cheat-search" type="search" maxlength="160" placeholder="Search cheats, vehicles, effects…" aria-label="Search all cheats" value="${escape(cheatListRoute.query || "")}"><kbd aria-hidden="true">/</kbd></label>${!standalone ? methodSwitch() : ""}<div class="chips" aria-label="Cheat categories">${Object.entries(
-    categoryNames,
-  )
-    .map(
-      ([id, title]) =>
-        `<a href="${routeURL("cheats", { c: id })}" ${!cheatListRoute.query && cheatListRoute.category === id ? 'aria-current="true"' : ""}>${title}</a>`,
-    )
-    .join(
-      "",
-    )}</div></div><div id="cheat-list">${cheatListContent(selected?.id)}</div></section><div class="detail-column">${standalone ? `<div class="detail-method">${methodSwitch()}</div>` : ""}<div id="cheat-detail">${selected ? cheatDetail(selected, standalone) : '<aside class="detail-panel empty"><h2>Find your next code</h2><p>Search a vehicle or effect to see its inputs here.</p></aside>'}</div></div></div><div class="mode-note"><span aria-hidden="true">ⓘ</span><p>Built-in cheats are for <strong>GTA V Story Mode</strong>. They do not work in GTA Online. <a href="#/guide">Read the essentials</a></p></div></div>`;
-}
-function mapFigure(id, compact = false) {
-  const store = stores.find((s) => s.id === id);
-  const isOverview = id === "overview";
-  const url = isOverview ? overview.image : store.image;
-  return `<figure class="map-figure ${isOverview ? "overview-figure" : "closeup-figure"} ${compact ? "compact-map" : ""}"><div class="map-load" data-map="${id}" role="group" aria-label="${isOverview ? "Original overview map" : escape(store.area) + " map close-up"}"><p class="map-status">Loading map from ${isOverview ? "GosuNoob" : "Fiction Horizon"}…</p></div><figcaption><div><strong>${isOverview ? "The original overview" : `Close-up ${store.sequence} of 19`}</strong><span>${isOverview ? "GosuNoob · SR / PR labels" : `Fiction Horizon · overview marker ${store.id}`}</span></div><button data-open-map="${id}" aria-label="Enlarge ${isOverview ? "overview map" : escape(store.area) + " map"}">Enlarge ⤢</button></figcaption><div class="map-links">${external(url, "Open image")}${external(isOverview ? overview.source : sources.fictionhorizon.url, "Source page")}</div></figure>`;
-}
-function progress() {
-  return `<div class="progress-line"><label for="store-progress"><strong>${state.stores.length} / 19</strong> checked <span>· this browser</span></label><progress id="store-progress" max="19" value="${state.stores.length}">${state.stores.length} of 19</progress></div>`;
-}
-function storeCheckbox(store, full = false) {
-  return `<label class="store-check ${full ? "full-check" : ""}"><input type="checkbox" data-store-check="${store.id}" ${state.stores.includes(store.id) ? "checked" : ""}><span class="${full ? "" : "sr-only"}">${full ? "Mark this store checked" : "Mark " + store.id + " " + escape(store.area) + " checked"}</span></label>`;
-}
-function filteredStores() {
-  const r = storeListRoute;
-  return searchItems(
-    stores.filter(
-      (s) =>
-        (r.region === "all" || !r.region || s.region === r.region) &&
-        (r.filter === "done"
-          ? state.stores.includes(s.id)
-          : r.filter === "todo"
-            ? !state.stores.includes(s.id)
-            : true),
-    ),
-    r.query || "",
-  );
-}
-function storeListContent(activeId) {
-  const items = filteredStores();
-  return `<div class="list-meta"><span>${items.length} stores</span><span>Original overview markers</span></div>${items.map((store) => `<article class="store-row ${activeId === store.id ? "selected" : ""}"><a class="store-row-link" href="#/store/${store.id}"><span class="exit-badge">${store.id}</span><span><strong>${escape(store.area)}</strong><small>${escape(store.name)} · ${escape(store.street)}</small></span><span class="chevron" aria-hidden="true">›</span></a>${storeCheckbox(store)}</article>`).join("") || `<div class="empty"><h2>No matching stores</h2><p>Try another area or show the full checklist.</p><button data-action="clear-store-search">Show all stores</button></div>`}`;
-}
-function storeDetail(store, standalone) {
-  return `<section class="detail-panel store-detail"><div class="detail-toolbar"><a class="back-link" href="${routeURL("stores", { q: storeListRoute.query, f: storeListRoute.filter, r: storeListRoute.region })}">← All stores</a><span class="exit-badge">${store.id}</span></div><div class="detail-heading"><span class="eyebrow">${escape(store.name)} / ${escape(store.street)}</span><${standalone ? "h1" : "h2"} tabindex="-1">${escape(store.area)}</${standalone ? "h1" : "h2"}></div>${mapFigure(store.id)}<p class="pin-note"><span aria-hidden="true">⌖</span> Match the map around the central crosshair. Other POI markers in the screenshot belong to its author.</p>${storeCheckbox(store, true)}${store.note ? `<aside class="note"><strong>Location-name disagreement</strong><p>${escape(store.note)}</p></aside>` : ""}<details class="overview-details"><summary>Locate ${store.id} on the overview</summary><div data-deferred-overview></div></details><div class="entry-sources">${sourceLinks(["gosunoob", "fictionhorizon", "powerpyx"])}<p>Original game screenshots; no generated map coordinates. The screenshots show Xbox prompts—use the PS5 on-screen map legend.</p></div></section>`;
-}
-function storesView() {
-  const standalone = route.view === "store";
-  if (!standalone) storeListRoute = { ...route };
-  const selected = standalone ? stores.find((s) => s.id === route.id) : null;
-  if (standalone && !selected) return missingView();
-  return `<div class="view stores-view ${standalone ? "detail-context" : ""}"><div class="page-heading"><div><span class="eyebrow">THE HOLD-UP ROUTE BOOK</span><h1 tabindex="-1">Store finder<span class="heading-count">${stores.length}</span></h1><p>Real map screenshots. Original markers. Your own checklist.</p></div><a class="help-link" href="#/guide">Map guide<br><span>How these labels work →</span></a></div><div class="workspace"><section class="master" aria-label="Find a store"><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="store-search" type="search" maxlength="160" aria-label="Search stores" placeholder="Area, street, or SR / PR marker…" value="${escape(storeListRoute.query || "")}"></label><div class="store-filters"><select id="store-region" aria-label="Store area">${Object.entries(
-    storeRegionNames,
-  )
-    .map(
-      ([id, title]) =>
-        `<option value="${id}" ${storeListRoute.region === id ? "selected" : ""}>${title}</option>`,
-    )
-    .join(
-      "",
-    )}</select><select id="store-filter" aria-label="Checklist filter">${[
-    ["all", "All stores"],
-    ["todo", "To do"],
-    ["done", "Checked"],
-  ]
-    .map(
-      ([id, title]) =>
-        `<option value="${id}" ${storeListRoute.filter === id ? "selected" : ""}>${title}</option>`,
-    )
-    .join(
-      "",
-    )}</select></div><div id="store-progress-area">${progress()}</div></div><div class="mobile-overview">${!standalone ? `<button type="button" class="overview-link" data-action="overview">⌖ Open the original overview map <span aria-hidden="true">⤢</span></button>` : ""}</div><div id="store-list">${storeListContent(selected?.id)}</div></section><div class="detail-column">${selected ? storeDetail(selected, true) : `<section class="detail-panel overview-panel"><div class="detail-heading"><span class="eyebrow">SAN ANDREAS / 19 STOPS</span><h2>Pick a store. Get your bearings.</h2><p>Select an area to see its exact in-game map close-up.</p></div>${mapFigure("overview")}<p class="tiny">SR = “store to rob”; PR = “place to rob”. Both label hold-up shops on this original map. Close-up numbers use a separate order.</p></section>`}</div></div><div class="mode-note"><span aria-hidden="true">ⓘ</span><p>This is a personal checklist of the 19 standard Story Mode hold-up shops, not a live game tracker. Checking all 19 is not required for the “hold up a store” part of 100% completion. ${sourceLinks(["powerpyx"])}</p></div></div>`;
-}
-function savedView() {
-  const saved = cheats.filter((c) => state.favorites.includes(c.id));
-  return `<div class="view saved-view"><div class="page-heading"><div><span class="eyebrow">YOUR PERSONAL SHORTLIST</span><h1 tabindex="-1">Saved for later<span class="heading-count">${saved.length}</span></h1><p>The good stuff, one tap away.</p></div>${methodSwitch()}</div><div class="saved-grid"><section><div class="section-label"><h2>Favorite cheats</h2><a href="#/cheats">Browse all →</a></div>${saved.length ? cheatRows(saved) : '<div class="empty"><span class="big-star" aria-hidden="true">☆</span><h2>Make this yours</h2><p>Tap the star beside a cheat to keep it here.</p><a class="button primary" href="#/cheats">Find a favorite →</a></div>'}</section><section class="saved-tools"><div class="panel"><span class="eyebrow">YOUR STORE RUN</span><h2>Keep your place.</h2>${progress()}<a class="button" href="#/stores?f=todo">Find an unchecked store →</a><p class="tiny">Saved in this browser only. There is no account or game sync. Clearing browser data can erase this checklist.</p></div><details class="backup"><summary>Back up or move your list</summary><p>Export a small text file, then paste its contents here on another browser. Import merges favorites and checked stores; it does not clear your existing list.</p><button data-action="export" class="primary">Export backup ↓</button>${storage.recovery ? '<aside class="note"><p>An older saved value could not be read. Its original contents are kept separately; this does not replace your current selections.</p><button data-action="export-recovery">Export recovery copy ↓</button></aside>' : ""}<label for="backup-text">Backup contents</label><textarea id="backup-text" rows="6" maxlength="50000" spellcheck="false" placeholder="Paste a Glovebox backup here"></textarea><button data-action="import">Merge backup</button><p id="backup-status" role="status"></p></details></section></div></div>`;
-}
-function guideView() {
-  return `<div class="view guide-view"><div class="page-heading"><div><span class="eyebrow">READ ONCE. KEEP PLAYING.</span><h1 tabindex="-1">The essentials</h1><p>Getting codes in, finding stores, and knowing what to trust.</p></div><span class="checked-stamp">CHECKED<br><strong>${checked.toUpperCase()}</strong></span></div><div class="guide-grid"><section class="panel"><span class="eyebrow">01 / PLAYSTATION INPUTS</span><h2>Two ways to enter a cheat.</h2><h3>With the in-game phone</h3><ol class="howto"><li>D-pad <strong>Up</strong> to open the phone.</li><li>Open <strong>Contacts</strong>, then press <strong>Square</strong> for the keypad.</li><li>Enter the number. Press <strong>Square</strong> to call it.</li></ol><p>These are GTA V numbers. Use your character’s phone, not your real phone. The “Copy” button only copies text on this device.</p><h3>With the controller</h3><p>Close the pause menu and enter the sequence promptly during gameplay. Directions use the D-pad. Read across each row, then continue on the next; Cross means the × button.</p><p>${sourceLinks(["gtabase", "phoneGuide"])}</p></section><section class="panel"><span class="eyebrow">02 / SAVES & TROPHIES</span><h2>Keep a clean save.</h2><blockquote>“Saving is allowed when cheat codes are enabled but achievements are temporarily disabled.”<cite>${sourceLinks(["rockstar"])} · retrieved ${checked}</cite></blockquote><p>Rockstar says reloading a save or rebooting the console resets cheats. Re-entering a code usually turns it off, but there are exceptions. A mission can also disable free-roam cheats.</p><div class="note"><strong>Our suggestion</strong><p>Make a separate manual save before experimenting. Reload your clean save before returning to trophy or story progress.</p></div></section><section class="panel"><span class="eyebrow">03 / CHEAT DENIED?</span><h2>Check the situation.</h2><ul class="plain-list"><li><strong>Story Mode only.</strong> These codes do not activate in GTA Online.</li><li><strong>Finish the current mission or activity.</strong> Some cheats are unavailable in certain contexts.</li><li><strong>Give vehicles clear space.</strong> Buildings, interiors and cramped roads can prevent a spawn.</li><li><strong>Check the unlock badge.</strong> Dodo needs Sea Plane, Duke O’Death needs Duel, and Kraken needs the Wildlife Photography Challenge.</li><li><strong>Skyfall has its own restrictions.</strong> It is not a helicopter substitute; you cannot open a parachute during it.</li></ul><p>${sourceLinks(["rockstar", "gtabase"])}</p><p>No built-in money, tank or jet spawn code is included because none is published in the checked GTA V code lists.</p></section><section class="panel"><span class="eyebrow">04 / THE REAL MAPS</span><h2>Match the pin, not the numbering.</h2><p>The overview retains GosuNoob’s <strong>SR1–SR9</strong> and <strong>PR1–PR10</strong> labels. Fiction Horizon’s <strong>close-up 1–19</strong> is a different order. Every store detail shows both identifiers.</p><p>The central crosshair in a close-up is your target. Match nearby streets and coastline on your in-game map, then follow the PS5 map’s own Point of Interest control. Other pins and Xbox button prompts belong to the source screenshot.</p><p>The checklist does not add pins in GTA V. Images load from the original publishers and need an internet connection. If an embed fails, use its source link.</p><p>${sourceLinks(["gosunoob", "fictionhorizon", "powerpyx"])}</p></section><section class="panel wide"><span class="eyebrow">05 / THE HONEST BITS</span><h2>Source-checked. Not console-tested.</h2><p>Published guides make mistakes too. Inputs were compared across sources; no cheat was tested on a physical PS5 for this guide. These disagreements remain visible rather than being presented as settled facts.</p><div class="disputes"><div><strong>Fast run & drunk mode</strong><p>Published phone numbers conflict. Their agreed controller inputs remain available. A phone-keypad mnemonic is a useful typo check, not proof that a code activates in the game.</p></div><div><strong>Rapid GT</strong><p>One or two opening R2 presses? Published controller lists differ. The agreed phone number is shown instead.</p></div><div><strong>Strawberry & northwest-hills stores</strong><p>Street or district names conflict. Both retain the original screenshot and overview marker; the naming issue is explained on the store page.</p></div><div><strong>Corrections applied</strong><p>PCJ-600 and Sanchez codes are not swapped. Trashmaster keeps all seven digits after 1-999. The weapons cheat gives a loadout, not every weapon or infinite ammo.</p></div></div></section><section class="panel"><span class="eyebrow">06 / KEEP IT HANDY</span><h2>One tap from your phone.</h2><p>Bookmark this page or use your browser’s <strong>Add to Home Screen</strong> option. On iPhone, look in Safari’s Share menu; on Android, look in your browser’s menu. ${sourceLinks(["apple"])}</p><p>Favorites and the checklist are local to the browser you use. A Home Screen shortcut or another browser may have separate storage. Use <a href="#/saved">Saved → Back up or move your list</a> when switching.</p><p>There is no offline guarantee. Open the guide while connected; publisher-hosted maps can become unavailable.</p></section><section class="panel"><span class="eyebrow">07 / PRIVACY & CREDITS</span><h2>A small, independent guide.</h2><p>No accounts, analytics, advertising or tracking scripts. Your saved selections stay in browser storage unless you export them. GitHub serves the site; map requests go directly to the image publishers, which can receive standard request information.</p><p>Map art and game screenshots belong to their respective rights holders. They are embedded from the attributed publishers, not regenerated or included in this repository’s code license.</p><p>Barlow Condensed and Overpass Mono are self-hosted under the SIL Open Font License. The guide’s original code uses MIT.</p><p>Unofficial; not affiliated with Rockstar Games or Take-Two.</p></section><section class="panel wide"><span class="eyebrow">SOURCE REGISTER</span><h2>Follow the evidence.</h2><div class="source-register">${Object.values(
-    sources,
-  )
-    .map(
-      (s) =>
-        `<div><h3>${external(s.url, escape(s.name))}</h3><p>${escape(s.scope)}</p></div>`,
-    )
-    .join(
-      "",
-    )}</div><p class="tiny">All sources accessed ${checked}. Agreement between websites is not the same as independent in-game testing. Store articles may share upstream information.</p></section></div></div>`;
-}
-function missingView() {
-  return '<div class="view empty"><span class="eyebrow">WRONG TURN</span><h1 tabindex="-1">That page is not in the glovebox.</h1><p>The link may be incomplete or refer to a removed entry.</p><a class="button primary" href="#/cheats">Back to cheats →</a></div>';
-}
-function render({ focus = true } = {}) {
-  const isCheat = ["cheats", "cheat"].includes(route.view),
-    isStore = ["stores", "store"].includes(route.view);
-  const view = isCheat ? "cheats" : isStore ? "stores" : route.view;
-  $("#app").innerHTML = isCheat
-    ? cheatsView()
-    : isStore
-      ? storesView()
-      : route.view === "saved"
-        ? savedView()
-        : route.view === "guide"
-          ? guideView()
-          : missingView();
-  document.querySelectorAll("[data-nav]").forEach((link) => {
-    if (link.dataset.nav === view) link.setAttribute("aria-current", "page");
-    else link.removeAttribute("aria-current");
+function render(keepPanels = true) {
+  const focus = document.activeElement;
+  const focusAttrs = ["action", "id", "delta", "kind", "count", "check", "money", "setting", "character", "zoom", "cheat"];
+  const focusSelector = focus?.id ? `#${CSS.escape(focus.id)}` :
+    focusAttrs.filter((key) => focus?.dataset[key] !== undefined)
+      .map((key) => `[data-${key}="${CSS.escape(focus.dataset[key])}"]`).join("");
+  const panelKey = (d) => d.dataset.moneyAccordion || d.querySelector("summary")?.textContent.replace(/\d+\/\d+/g, "");
+  const openPanels = keepPanels && renderedView === route.view
+    ? [...app.querySelectorAll("details[open]:not([data-money-accordion])")].map(panelKey) : [];
+  const stage = document.querySelector("#map-stage");
+  const mapState = renderedStore === route.id && stage ? { zoom, left: stage.scrollLeft, top: stage.scrollTop } : null;
+  document.body.dataset.view = route.view;
+  document.body.classList.toggle("viewer-mode", route.view === "store");
+  app.innerHTML = renderView(route, { ...state, activeMoney, cheatBack: cheatReturn?.hash });
+  app.querySelectorAll("details").forEach((d) => { if (openPanels.includes(panelKey(d))) d.open = true; });
+  renderedView = route.view;
+  renderedStore = route.view === "store" ? route.id : null;
+  const active = ["cheat", "cheats"].includes(route.view)
+    ? "cheats"
+    : ["store", "stores"].includes(route.view)
+      ? "stores"
+      : ["money", "crews", "properties"].includes(route.view)
+        ? "money"
+        : ["progress", "wildlife", "missions"].includes(route.view)
+          ? "progress"
+          : "play";
+  document.querySelectorAll("[data-nav]").forEach((a) => {
+    if (a.dataset.nav === active) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
   });
   const title =
     route.view === "cheat"
@@ -302,398 +191,898 @@ function render({ focus = true } = {}) {
       : route.view === "store"
         ? stores.find((s) => s.id === route.id)?.area
         : {
-            cheats: "Cheat sheet",
-            stores: "Store finder",
-            saved: "Saved",
-            guide: "The essentials",
-          }[view];
-  document.title = `${title || "Page not found"} · Glovebox / GTA V`;
-  mountMaps();
-  showStorageWarning();
-  if (focus) {
-    const h =
-      route.view === "cheat" || route.view === "store"
-        ? $(".detail-panel h1") || $("#app h1")
-        : $("#app h1");
-    h?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: "instant" });
+            play: "Play",
+            cheats: "Cheats",
+            stores: "Places",
+            money: "Stock trades",
+            progress: "100%",
+            wildlife: "Wildlife",
+            crews: "Heist crews",
+            properties: "Properties",
+            missions: "Mission reference",
+            about: "Sources",
+          }[route.view];
+  document.title = `${title || "Guide"} · Glovebox / PS5`;
+  bindImage(mapState);
+  showWarning();
+  updateSession();
+  updateWakeLabels();
+  if (focusSelector && app.contains(focus) === false)
+    app.querySelector(focusSelector)?.focus({ preventScroll: true });
+}
+function openSheet(title, html) {
+  if (sheet.open) sheet.close();
+  returnFocus = document.activeElement;
+  document.querySelector("#sheet-title").textContent = title;
+  document.querySelector("#sheet-body").innerHTML = html;
+  sheet.showModal();
+}
+function closeDialogs() {
+  if (sheet.open) sheet.close();
+  if (big.open) big.close();
+}
+sheet.addEventListener("close", () => {
+  pendingImport = null;
+  returnFocus?.isConnected && returnFocus.focus({ preventScroll: true });
+});
+big.addEventListener("close", () => {
+  activeBig = null;
+  if (wakeFromBig) { wakeFromBig = false; void setWake(false); }
+  returnFocus?.isConnected && returnFocus.focus({ preventScroll: true });
+});
+function showSettings() {
+  openSheet(
+    "Make it yours",
+    `
+ <div class="setting"><div class="label">Input preference</div><label>Cheat method first <select id="preferred-method"><option value="phone" ${state.method === "phone" ? "selected" : ""}>Phone number</option><option value="pad" ${state.method === "pad" ? "selected" : ""}>Controller sequence</option></select></label><p>Both methods are always in the cheat detail.</p></div>
+ <div class="setting"><button data-action="wake" class="full-width">Keep screen awake <span data-wake-label></span></button><p id="wake-description">${"wakeLock" in navigator ? "Works while this page is visible. Your browser may release it when you change apps." : "This browser cannot keep the screen on. Use Auto-Lock in your device settings."}</p></div>
+ <div class="setting"><div class="label">Available characters for stock checklists</div><p>All three are available by default. Uncheck only a character you cannot currently play.</p>${characters.map((c) => `<label class="char-${c}"><input type="checkbox" data-character="${c}" ${!state.settings.hiddenCharacters.includes(c) ? "checked" : ""}/>${names[c]}</label>`).join("")}</div>
+ <div class="setting"><h3>Keep your progress</h3><p>${state.favorites.length} pins · ${state.stores.length} stores · ${state.checks.length} task checks · ${state.money.length} trade checks. Saved on this device. Backups also include totals, price notes and your session note.</p><div class="inline-actions"><button class="primary" data-action="export">Export backup</button><button data-action="import">Import backup</button></div><p>${db.warning ? esc(db.warning) : "Local storage is working."} No account or game connection is needed.</p>${db.recovery ? '<button data-action="recovery">Download recovered old data</button>' : ""}</div>
+ <div class="setting"><h3>Put it on your Home Screen</h3><p>iPhone: Share → Add to Home Screen. Android Chrome: menu → Add to Home screen. Keep a backup when switching browsers or devices.</p><a href="#/about">Sources & credits →</a></div>`,
+  );
+  updateWakeLabels();
+}
+function showSearch() {
+  openSheet(
+    "Find anything",
+    `<div class="toolbar"><input id="global-search" type="search" placeholder="Cheat, stock, mission, animal, place…" aria-label="Search the whole guide" autocomplete="off"/></div><div id="global-results" class="search-results"><p class="meta">Try “repair”, “Vapid”, “Packie”, or a mission name.</p></div>`,
+  );
+  document.querySelector("#global-search").focus();
+}
+function searchAll(q) {
+  if (!q.trim()) {
+    document.querySelector("#global-results").innerHTML =
+      '<p class="meta">Search cheats, maps, stocks, missions, activities and properties.</p>';
+    return;
+  }
+  const entries = [
+    ...cheats.map((c) => ({ ...c, url: `#/cheat/${c.id}`, kind: "Cheat" })),
+    ...stores.map((s) => ({
+      ...s,
+      title: `${s.name} · ${s.area}`,
+      url: `#/store/${s.id}`,
+      kind: "Store map",
+    })),
+    ...playbook.map((t) => ({
+      ...t,
+      url: `#/play?q=${encodeURIComponent(t.title)}`,
+      kind: "Playbook",
+    })),
+    ...crews.map((c) => ({ ...c, aliases: c.rows.flat().join(" "), url: `#/crews?q=${encodeURIComponent(c.title)}`, kind: "Heist crew" })),
+    ...hobbies.flatMap((g) => g.items.map((item) => ({ ...item, aliases: g.title, url: `#/progress?q=${item.id}`, kind: g.title }))),
+    ...miscellaneous.map((item) => ({ ...item, url: `#/progress?q=${item.id}`, kind: "100% activity" })),
+    ...assassinations.map((m) => ({
+      ...m,
+      aliases: [m.before, m.after, m.rebound].flat().filter(Boolean).join(" "),
+      url: "#/money",
+      kind: "Stock plan",
+      target: m.id,
+    })),
+    ...properties.map((p) => ({ ...p, url: "#/properties", kind: "Property" })),
+    ...wildlife.map((a) => ({
+      ...a,
+      url: `#/wildlife?q=${encodeURIComponent(a.title)}`,
+      kind: "Wildlife",
+    })),
+    ...collectibles.map((c) => ({
+      ...c,
+      url: `#/progress?q=${c.id}`,
+      kind: "Collectibles",
+    })),
+    ...missionGuides.map((m) => ({ ...m, kind: "Mission walkthrough" })),
+  ];
+  const hits = searchItems(entries, q);
+  document.querySelector("#global-results").innerHTML = hits.length
+    ? `<p class="meta">${hits.length} results${hits.length > 30 ? " · first 30 shown" : ""}</p>${hits
+        .slice(0, 30)
+        .map(
+          (h) =>
+            `<a class="row" href="${esc(h.url)}" ${h.url.startsWith("https:") ? 'target="_blank" rel="noopener noreferrer"' : ""} ${h.target ? `data-money-target="${h.target}"` : ""}><span class="grow"><span class="row-title">${esc(h.title)}</span><small>${h.kind}${h.phone ? " · " + h.phone : ""}</small></span><span class="arrow">${h.url.startsWith("https:") ? "↗" : "→"}</span></a>`,
+        )
+        .join("")}`
+    : `<p class="empty">No matches for “${esc(q)}”. Try a shorter name.</p>`;
+}
+function showBig(id) {
+  const c = cheats.find((c) => c.id === id);
+  if (!c) return;
+  const opening = !big.open;
+  const focusedAction = big.contains(document.activeElement)
+    ? document.activeElement.dataset.action
+    : null;
+  if (opening) returnFocus = document.activeElement;
+  activeBig = id;
+  const pad = state.method === "pad" && c.buttons;
+  const pinned = state.favorites.length > 1;
+  big.innerHTML = `<div class="big-top"><div><div class="label">${c.mnemonic}</div><h2 id="big-title">${esc(c.title)}</h2></div><div class="inline-actions">${c.buttons ? `<button data-action="big-method">${pad ? "Phone" : "Controller"}</button>` : ""}<button data-action="close-big" aria-label="Close big view">✕</button></div></div><div class="big-code">${pad ? padRun(c) : phoneCode(c)}</div><div class="bottom"><div class="inline-actions">${pinned ? '<button data-action="big-prev" aria-label="Previous pinned cheat">← Pin</button><button data-action="big-next" aria-label="Next pinned cheat">Pin →</button>' : ""}${c.id === "invincibility" ? '<button data-action="timer-start">Start 5:00</button>' : ""}<button data-action="wake">Awake <span data-wake-label></span></button></div>${pad ? `<p class="mono">${c.phone}</p>` : "<p>Dial on the in-game phone.</p>"}</div>`;
+  if (opening) {
+    big.showModal();
+    if ("wakeLock" in navigator && !wakeWanted) { wakeFromBig = true; void setWake(true); }
+  } else if (focusedAction)
+    big.querySelector(`[data-action="${focusedAction}"]`)?.focus();
+  updateWakeLabels();
+}
+function download(text, name, type = "application/json") {
+  const blob = new Blob([text], { type }),
+    url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportBackup(value = state, label = "backup") {
+  download(
+    JSON.stringify({ ...value, exportedAt: new Date().toISOString() }, null, 2),
+    `glovebox-${label}-${new Date().toISOString().slice(0, 10)}.json`,
+  );
+  if (value === state)
+    change((s) => {
+      s.lastExportAt = Date.now();
+    }, false);
+}
+function showImport() {
+  openSheet(
+    "Import your backup",
+    `<p>Accepts the original v1 and current v2 backups. You’ll review the contents before replacing anything.</p><label class="check-row">Choose JSON file <input id="import-file" type="file" accept=".json,application/json"/></label><p class="meta">Or paste a backup:</p><textarea id="import-text" rows="6" aria-label="Backup JSON" spellcheck="false"></textarea><button data-action="import-preview" class="primary">Review import</button><div id="import-result" role="status"></div>`,
+  );
+}
+function previewImport(raw) {
+  try {
+    if (raw.length > 300000)
+      throw Error("This file is too large for a Glovebox backup.");
+    const result = sanitizeState(JSON.parse(raw));
+    pendingImport = result.state;
+    document.querySelector("#import-result").innerHTML =
+      `<div class="note-box"><p><strong>Ready to import</strong></p><p>${pendingImport.favorites.length} pins · ${pendingImport.stores.length} stores · ${pendingImport.checks.length} task checks · ${pendingImport.money.length} trade checks.</p><p>${result.dropped ? `${result.dropped} unknown or duplicate entries will be ignored. ` : ""}Applying downloads a backup of your current data first.</p><button class="primary" data-action="import-apply">Back up current & import</button></div>`;
+  } catch (error) {
+    pendingImport = null;
+    document.querySelector("#import-result").textContent =
+      `Could not import: ${error.message}`;
   }
 }
-function mountMaps(root = document) {
-  root.querySelectorAll("[data-map]").forEach((holder) => {
-    if (holder.dataset.mounted) return;
-    holder.dataset.mounted = "true";
-    const id = holder.dataset.map;
-    const data = id === "overview" ? overview : stores.find((s) => s.id === id);
-    const img = new Image();
-    img.width = data.width;
-    img.height = data.height;
-    img.alt =
-      id === "overview"
-        ? "Original GTA V overview map with SR1–SR9 and PR1–PR10 hold-up store labels."
-        : `${data.name}, ${data.area}: original in-game map close-up ${data.sequence}, corresponding to overview marker ${id}. Locate the central crosshair.`;
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.addEventListener("load", () => {
-      holder.querySelector(".map-status")?.remove();
-      holder.classList.add("loaded");
-    });
-    img.addEventListener(
-      "error",
-      () => {
-        img.remove();
-        holder.classList.add("failed");
-        holder.innerHTML = `<div class="map-error"><strong>Map didn’t load.</strong><p>The publisher may block embedding, or you may be offline.</p>${external(id === "overview" ? overview.source : sources.fictionhorizon.url, "Open source page")}<button data-retry-map="${id}">Retry image</button></div>`;
-      },
-      { once: true },
-    );
-    // Attach handlers before src: cached failures must be visible too.
-    holder.append(img);
-    img.src = data.image;
+function showPrices(id, char = priceCharacter) {
+  priceMission = id;
+  priceCharacter = char;
+  const m = assassinations.find((x) => x.id === id),
+    p = state.prices[id]?.[char] || {};
+  openSheet(
+    "Price notes & profit",
+    `<div class="label">${esc(m.title)}</div><p>Enter one trade from your game. These are your notes, not live quotes. Replace them when you move to a rebound trade.</p><label>Portfolio <select id="price-character">${characters.map((c) => `<option value="${c}" ${char === c ? "selected" : ""}>${names[c]}</option>`).join("")}</select></label><div class="price-grid">${[
+      ["cash", "Cash to invest"],
+      ["buy", "Buy price"],
+      ["sell", "Sell price"],
+    ]
+      .map(
+        ([k, l]) =>
+          `<label>${l}<input inputmode="decimal" type="text" data-price="${k}" value="${esc(p[k] || "")}" placeholder="${k === "cash" ? "1,000,000" : "100.00"}" autocomplete="off"/></label>`,
+      )
+      .join(
+        "",
+      )}</div><div id="price-result" aria-live="polite"></div><p class="meta">Whole shares, with leftover cash kept. The game’s $2,147,483,647 character balance limit is separate from the calculated trade value.</p>`,
+  );
+  calculatePrices();
+}
+function calculatePrices() {
+  const p = state.prices[priceMission]?.[priceCharacter] || {},
+    result = document.querySelector("#price-result");
+  if (!result) return;
+  if (!["cash", "buy", "sell"].every((k) => p[k]?.trim())) {
+    result.innerHTML =
+      '<p class="meta">Enter all three amounts to calculate. Notes save as you type.</p>';
+    return;
+  }
+  try {
+    const r = calculateTrade(p.cash, p.buy, p.sell);
+    result.innerHTML = `<div class="calc-result"><p class="${r.profit < 0 ? "loss" : "gain"}"><strong>${r.profit < 0 ? "" : "+"}${moneyFormat(r.profit)} · ${r.percent.toFixed(2)}%</strong></p><p>${r.shares.toLocaleString("en-US")} shares · ${moneyFormat(r.unspent)} unspent</p><p>After sale: ${moneyFormat(r.total)}</p>${r.aboveCap ? '<p class="error">Above the game’s character balance limit; the full calculated amount cannot be retained.</p>' : ""}</div>`;
+  } catch (error) {
+    result.innerHTML = `<p class="error">${esc(error.message)}</p>`;
+  }
+}
+function startTimer() {
+  change((s) => {
+    s.timer = {
+      status: "running",
+      endsAt: Date.now() + 300000,
+      remainingMs: 0,
+    };
   });
-  root.querySelectorAll(".overview-details").forEach((detail) =>
-    detail.addEventListener(
-      "toggle",
-      () => {
-        const holder = detail.querySelector("[data-deferred-overview]");
-        if (detail.open && !holder.children.length) {
-          holder.innerHTML = mapFigure("overview");
-          mountMaps(holder);
-        }
-      },
-      { once: true },
-    ),
+  updateSession();
+  toast(
+    "5-minute reminder started. Pause it yourself when you pause the game.",
   );
 }
-function openMap(id) {
-  const store = stores.find((s) => s.id === id);
-  $("#map-title").textContent =
-    id === "overview"
-      ? "Original overview · SR / PR markers"
-      : `${store.id} · ${store.area} · close-up ${store.sequence}`;
-  $("#map-viewport").className = "map-viewport";
+function updateSession() {
+  let t = state.timer;
+  if (t?.status === "running" && remainingTime(t) === 0) {
+    change((s) => {
+      s.timer = { status: "expired", endsAt: 0, remainingMs: 0 };
+    }, false);
+    t = state.timer;
+    announce("Invincibility reminder expired.");
+  }
+  const panel = document.querySelector("#session");
+  panel.hidden = !t && !wakeWanted;
+  document.documentElement.style.setProperty(
+    "--bar",
+    panel.hidden ? "0px" : "48px",
+  );
+  const seconds = Math.ceil(remainingTime(t) / 1000),
+    clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const sessionKey = [
+    t?.status || "",
+    wakeWanted,
+    !!wakeSentinel,
+    wakePending,
+    route.view,
+  ].join("|");
+  if (lastSessionKey === sessionKey) {
+    const value = panel.querySelector(".timer-value");
+    if (value) value.textContent = t?.status === "expired" ? "0:00" : clock;
+    return;
+  }
+  lastSessionKey = sessionKey;
+  const focusedAction = panel.contains(document.activeElement)
+    ? document.activeElement.dataset.action
+    : null;
+  panel.innerHTML = `${t ? `<div class="inline-actions"><span class="timer-label">Invincibility reminder</span><span class="timer-value ${t.status === "expired" ? "loss" : ""}">${t.status === "expired" ? "0:00" : clock}</span><button data-action="timer-pause" aria-label="${t.status === "running" ? "Pause reminder" : t.status === "expired" ? "Restart reminder" : "Resume reminder"}">${t.status === "running" ? "Ⅱ" : t.status === "expired" ? "Restart" : "▶"}</button><button data-action="timer-stop" aria-label="Stop reminder">✕</button></div>` : ""}${wakeWanted ? `<button data-action="wake" class="awake-state">${wakeSentinel ? "☀ Awake" : "☀ " + (wakePending ? "Starting…" : "Paused")}</button>` : ""}${!["store", "money"].includes(route.view) ? '<button data-action="resume" class="resume-label">Resume cheat ↗</button>' : ""}`;
+  if (focusedAction)
+    panel
+      .querySelector(`[data-action="${focusedAction}"]`)
+      ?.focus({ preventScroll: true });
+}
+setInterval(() => {
+  if (state.timer) updateSession();
+}, 1000);
+async function setWake(want) {
+  wakeWanted = want;
+  wakeError = "";
+  if (!want) {
+    if (wakeSentinel) {
+      const held = wakeSentinel;
+      wakeSentinel = null;
+      try {
+        await held.release();
+      } catch (error) {
+        wakeError = error.name;
+        toast(`Screen lock release: ${error.name}`);
+      }
+    }
+    updateWakeLabels();
+    updateSession();
+    return;
+  }
+  if (!("wakeLock" in navigator)) {
+    wakeWanted = false;
+    toast(
+      "This browser cannot keep the screen on. Use Auto-Lock in device settings.",
+    );
+    updateWakeLabels();
+    return;
+  }
+  if (wakePending || wakeSentinel || document.visibilityState !== "visible")
+    return;
+  wakePending = true;
+  updateSession();
+  try {
+    const held = await navigator.wakeLock.request("screen");
+    if (!wakeWanted) {
+      await held.release();
+      return;
+    }
+    wakeSentinel = held;
+    held.addEventListener("release", () => {
+      if (wakeSentinel === held) wakeSentinel = null;
+      updateWakeLabels();
+      updateSession();
+    });
+  } catch (error) {
+    wakeError = error.name;
+    wakeWanted = false;
+    toast(
+      `Could not keep the screen awake: ${error.name}. Check browser or battery settings.`,
+    );
+  } finally {
+    wakePending = false;
+    updateWakeLabels();
+    updateSession();
+  }
+}
+function updateWakeLabels() {
+  document.querySelectorAll("[data-wake-label]").forEach((e) => {
+    e.textContent = wakeSentinel ? "· On" : wakeWanted ? "· Paused" : "· Off";
+  });
+  document.querySelectorAll('[data-action="wake"]').forEach((b) => {
+    b.setAttribute("aria-pressed", String(!!wakeSentinel));
+    if (!("wakeLock" in navigator)) {
+      b.disabled = true;
+      b.title = "Use Auto-Lock in system settings";
+    }
+  });
+  const note = document.querySelector("#wake-description");
+  if (note && wakeError)
+    note.textContent = `Screen wake request failed: ${wakeError}. Use device Auto-Lock settings if needed.`;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (state.timer) updateSession();
+    if (wakeWanted && !wakeSentinel) void setWake(true);
+  }
+});
+function bindImage(mapState = null) {
+  zoom = mapState?.zoom || 1;
+  const img = document.querySelector("#store-image");
+  if (!img) return;
+  const s = stores.find((s) => s.id === route.id);
+  const loaded = () => {
+    if (!img.isConnected) return;
+    document.querySelector("#map-loading")?.setAttribute("hidden", "");
+    const changed = document.querySelector("#map-changed");
+    if (changed)
+      changed.hidden =
+        img.naturalWidth === s.width && img.naturalHeight === s.height;
+    setZoom(zoom, false);
+    if (mapState) requestAnimationFrame(() => {
+      if (img.isConnected) document.querySelector("#map-stage")?.scrollTo(mapState.left, mapState.top);
+    });
+  };
+  const failed = () => {
+    if (!img.isConnected) return;
+    document.querySelector("#map-stage").innerHTML =
+      `<div class="map-error"><h2>The close-up didn’t load</h2><p>The image is hosted by Fiction Horizon. You can retry or open the original; store navigation still works.</p><div class="inline-actions"><button data-action="retry-map">Retry image</button>${external(s.image, "Original image")}${external(sources.fictionhorizon.url, "Publisher page")}</div></div>`;
+  };
+  img.addEventListener("load", loaded, { once: true });
+  img.addEventListener("error", failed, { once: true });
+  if (img.complete) {
+    if (img.naturalWidth) loaded();
+    else failed();
+  }
+  const strip = document.querySelector(".place-jumps");
+  const selected = strip?.querySelector('[aria-current="location"]');
+  if (selected) strip.scrollLeft = selected.offsetLeft - strip.offsetLeft - strip.clientWidth / 2 + selected.clientWidth / 2;
+}
+function setZoom(n, center = true) {
+  const stage = document.querySelector("#map-stage");
+  if (!stage) return;
+  zoom = Math.max(1, Math.min(3, n));
+  stage.className = `map-stage${zoom > 1 ? " zoom-" + zoom : ""}`;
+  if (zoom === 1) stage.scrollTo(0, 0);
+  else if (center) requestAnimationFrame(() => {
+    if (stage.isConnected) stage.scrollTo((stage.scrollWidth - stage.clientWidth) / 2, (stage.scrollHeight - stage.clientHeight) / 2);
+  });
   document
     .querySelectorAll("[data-zoom]")
-    .forEach((button) =>
-      button.setAttribute(
-        "aria-pressed",
-        String(button.dataset.zoom === "fit"),
-      ),
+    .forEach((b) =>
+      b.setAttribute("aria-pressed", String(Number(b.dataset.zoom) === zoom)),
     );
-  $("#map-viewport").innerHTML =
-    `<div class="map-load" data-map="${id}"><p class="map-status">Loading original image…</p></div>`;
-  $("#map-dialog").showModal();
-  mountMaps($("#map-dialog"));
 }
-function updateSearch(view, value) {
-  const leavingDetail = route.view === "cheat" || route.view === "store";
-  const caret = document.activeElement?.selectionStart;
-  const r = view === "cheats" ? cheatListRoute : storeListRoute;
-  r.query = value;
-  history.replaceState(
-    null,
-    "",
-    routeURL(
-      view,
-      view === "cheats"
-        ? { c: r.category, q: value }
-        : { q: value, f: r.filter, r: r.region },
-    ),
-  );
-  route = { ...r };
-  if (leavingDetail) {
-    render({ focus: false });
-    const input = $(view === "cheats" ? "#cheat-search" : "#store-search");
-    input.focus({ preventScroll: true });
-    if (typeof caret === "number") input.setSelectionRange(caret, caret);
-    announce(
-      `${view === "cheats" ? filteredCheats().length : filteredStores().length} matching ${view}`,
+function markStore(id) {
+  const previous = [...state.stores];
+  change((s) => {
+    s.stores = toggle(s.stores, id);
+  }, true);
+  toast(state.stores.includes(id) ? "Store checked" : "Store unchecked", () => {
+    change((s) => {
+      s.stores = previous;
+    }, true);
+  });
+}
+function doneNext() {
+  if (state.stores.length === stores.length) {
+    openSheet(
+      "All 19 stores checked",
+      `<p>Your store tour is complete. Start a fresh checklist whenever you like.</p><button class="primary" data-action="reset-stores">Reset store checks</button>`,
     );
     return;
   }
-  if (view === "cheats") {
-    const selected = filteredCheats()[0];
-    $("#cheat-list").innerHTML = cheatListContent(selected?.id);
-    $("#cheat-detail").innerHTML = selected
-      ? cheatDetail(selected, false)
-      : '<aside class="detail-panel empty"><h2>No matching cheat</h2><p>Try a different search.</p></aside>';
-    announce(`${filteredCheats().length} matching cheats`);
-  } else {
-    $("#store-list").innerHTML = storeListContent();
-    announce(`${filteredStores().length} matching stores`);
-  }
+  const old = [...state.stores],
+    id = route.id;
+  change((s) => {
+    if (!s.stores.includes(id)) s.stores.push(id);
+  });
+  const next = nextStore(id, state.stores, true);
+  if (next) go(`#/store/${next}`, true);
+  else render();
+  toast(
+    next ? "Checked. Next unchecked store." : "All 19 stores checked.",
+    () => {
+      change((s) => {
+        s.stores = old;
+      });
+      go(`#/store/${id}`, true);
+    },
+  );
 }
-
-document.addEventListener("input", (event) => {
-  if (event.target.id === "cheat-search")
-    updateSearch("cheats", event.target.value);
-  if (event.target.id === "store-search")
-    updateSearch("stores", event.target.value);
-});
-document.addEventListener("change", (event) => {
-  const target = event.target;
-  if (target.name === "method") {
-    state.method = target.value;
-    persist();
-    render({ focus: false });
-    document
-      .querySelector(`input[name="method"][value="${state.method}"]`)
-      ?.focus();
-  }
-  if (target.dataset.storeCheck) {
-    const id = target.dataset.storeCheck;
-    state.stores = target.checked
-      ? [...new Set([...state.stores, id])]
-      : state.stores.filter((value) => value !== id);
-    persist();
-    document.querySelectorAll(`[data-store-check="${id}"]`).forEach((input) => {
-      input.checked = target.checked;
-    });
-    if ($("#store-progress-area"))
-      $("#store-progress-area").innerHTML = progress();
-    if (["todo", "done"].includes(storeListRoute.filter) && $("#store-list")) {
-      $("#store-list").innerHTML = storeListContent(route.id);
-      if (!target.isConnected) $("#store-filter")?.focus();
+function setCount(kind, id, value, renderAfter = true) {
+  const spec = (kind === "progress" ? completionCategories : collectibles).find(
+    (x) => x.id === id,
+  );
+  if (!spec) return;
+  const n = Number(value);
+  change((s) => {
+    s[kind][id] = Number.isFinite(n)
+      ? Math.max(0, Math.min(spec.total, Math.trunc(n)))
+      : 0;
+  }, renderAfter);
+}
+function updateQuery(key, value) {
+  const p = new URLSearchParams(location.hash.split("?")[1] || "");
+  if (value) p.set(key, value);
+  else p.delete(key);
+  const path = location.hash.split("?")[0],
+    q = p.toString();
+  history.replaceState(null, "", path + (q ? "?" + q : ""));
+  route = parseRoute(location.hash);
+  save({ ...state, lastRoute: location.hash }, false);
+}
+document.addEventListener("click", async (e) => {
+  const anchor = e.target.closest("a[href]");
+  if (anchor) {
+    if (anchor.dataset.cheat) {
+      if (route.view === "cheats") cheatReturn = { hash: location.hash, y: scrollY, id: anchor.dataset.cheat };
+      else if (route.view === "cheat") {
+        e.preventDefault();
+        go(anchor.getAttribute("href"), true);
+        return;
+      }
     }
-    announce(
-      `${id} ${target.checked ? "checked" : "unchecked"}. ${state.stores.length} of 19 checked.`,
+    if (anchor.hasAttribute("data-back-cheats") && cheatReturn) {
+      e.preventDefault();
+      history.back();
+      return;
+    }
+    if (anchor.dataset.moneyTarget) {
+      activeMoney = anchor.dataset.moneyTarget;
+      change((s) => {
+        s.activeMoney = activeMoney;
+      }, false);
+    }
+    if (anchor.dataset.store) {
+      if (route.view === "stores")
+        storeReturn = {
+          hash: location.hash,
+          y: scrollY,
+          id: anchor.dataset.store,
+        };
+      else if (route.view === "store") {
+        e.preventDefault();
+        closeDialogs();
+        go(anchor.getAttribute("href"), true);
+        return;
+      }
+    }
+    if (anchor.hasAttribute("data-back-stores") && storeReturn) {
+      e.preventDefault();
+      history.back();
+      return;
+    }
+    if (anchor.getAttribute("href").startsWith("#/")) {
+      closeDialogs();
+      if (anchor.getAttribute("href") === location.hash) {
+        render(!anchor.dataset.moneyTarget);
+        if (anchor.dataset.moneyTarget)
+          document
+            .querySelector(`[data-money-accordion="${activeMoney}"]`)
+            ?.scrollIntoView({ block: "start" });
+      }
+    }
+  }
+  const z = e.target.closest("[data-zoom]");
+  if (z) {
+    setZoom(Number(z.dataset.zoom));
+    return;
+  }
+  const button = e.target.closest("[data-action]");
+  if (!button) return;
+  const { action, id } = button.dataset;
+  switch (action) {
+    case "search":
+      showSearch();
+      break;
+    case "settings":
+      showSettings();
+      break;
+    case "close-sheet":
+      sheet.close();
+      break;
+    case "sources":
+      openSheet("Sources", sourcesHTML(button.dataset.ids.split(",")));
+      break;
+    case "favorite":
+      change((s) => {
+        s.favorites = toggle(s.favorites, id);
+      }, true);
+      toast(
+        state.favorites.includes(id) ? "Pinned for next time" : "Pin removed",
+      );
+      break;
+    case "method":
+      change((s) => {
+        s.method = id;
+      }, true);
+      break;
+    case "big":
+      showBig(id);
+      break;
+    case "close-big":
+      big.close();
+      break;
+    case "big-method":
+      change((s) => {
+        s.method = s.method === "phone" ? "pad" : "phone";
+      });
+      showBig(activeBig);
+      render();
+      break;
+    case "big-next":
+    case "big-prev": {
+      const pins = state.favorites;
+      const i = pins.indexOf(activeBig);
+      showBig(
+        pins[
+          i < 0
+            ? action === "big-next"
+              ? 0
+              : pins.length - 1
+            : (i + (action === "big-next" ? 1 : -1) + pins.length) % pins.length
+        ],
+      );
+      break;
+    }
+    case "check":
+      change((s) => {
+        s.checks = toggle(s.checks, id);
+      }, true);
+      break;
+    case "pick-store":
+      openSheet(
+        "Jump to a store",
+        storeList(
+          { id: route.id, query: "", filter: "all", region: "all" },
+          state,
+          true,
+        ),
+      );
+      break;
+    case "store-prev":
+    case "store-next":
+      go(
+        `#/store/${nextStore(route.id, state.stores, false, action === "store-next" ? 1 : -1)}`,
+        true,
+      );
+      break;
+    case "store-jump":
+      go(`#/store/${id}`, true);
+      break;
+    case "store-toggle":
+      markStore(id);
+      break;
+    case "store-next-undone":
+      doneNext();
+      break;
+    case "retry-map":
+      render();
+      break;
+    case "reset-stores": {
+      const old = [...state.stores];
+      change((s) => {
+        s.stores = [];
+      }, true);
+      sheet.close();
+      toast("Store checks reset", () =>
+        change((s) => {
+          s.stores = old;
+        }, true),
+      );
+      break;
+    }
+    case "timer-start":
+      startTimer();
+      break;
+    case "timer-stop":
+      change((s) => {
+        s.timer = null;
+      });
+      updateSession();
+      break;
+    case "timer-pause":
+      if (state.timer?.status === "expired") startTimer();
+      else
+        change((s) => {
+          s.timer =
+            s.timer.status === "running"
+              ? {
+                  status: "paused",
+                  endsAt: 0,
+                  remainingMs: remainingTime(s.timer),
+                }
+              : {
+                  status: "running",
+                  endsAt: Date.now() + s.timer.remainingMs,
+                  remainingMs: 0,
+                };
+        });
+      updateSession();
+      break;
+    case "wake":
+      wakeFromBig = false;
+      await setWake(!wakeWanted);
+      break;
+    case "resume":
+      if (route.view === "store" || route.view === "money")
+        document.querySelector("#main").focus();
+      else showBig(activeBig || state.recent[0] || "invincibility");
+      break;
+    case "undo": {
+      const undo = undoAction;
+      undoAction = null;
+      document.querySelector("#toast").hidden = true;
+      if (undo) undo();
+      break;
+    }
+    case "prices":
+      showPrices(id);
+      break;
+    case "reset-money": {
+      const old = state.money.filter((k) => k.startsWith(id + "-"));
+      change((s) => {
+        s.money = s.money.filter((k) => !k.startsWith(id + "-"));
+      }, true);
+      toast("Trade checklist reset", () =>
+        change((s) => {
+          s.money = [...new Set([...s.money, ...old])];
+        }, true),
+      );
+      break;
+    }
+    case "step":
+      setCount(
+        button.dataset.kind,
+        id,
+        (state[button.dataset.kind][id] || 0) + Number(button.dataset.delta),
+      );
+      break;
+    case "export":
+      exportBackup();
+      toast("Backup downloaded");
+      break;
+    case "recovery":
+      download(db.recovery, "glovebox-recovery.txt", "text/plain");
+      break;
+    case "import":
+      showImport();
+      break;
+    case "import-preview":
+      previewImport(document.querySelector("#import-text").value);
+      break;
+    case "import-apply": {
+      if (!pendingImport) return;
+      const previous = structuredClone(state),
+        incoming = pendingImport;
+      exportBackup(previous, "before-import");
+      save(incoming);
+      sheet.close();
+      render();
+      toast("Backup imported", () => {
+        save(previous);
+        render();
+      });
+      break;
+    }
+  }
+});
+document.addEventListener("change", async (e) => {
+  const el = e.target;
+  if (el.matches("[data-check]")) {
+    change((s) => {
+      s.checks = toggle(s.checks, el.dataset.check);
+    });
+    refreshCheckedCounts();
+  }
+  if (el.matches("[data-money]"))
+    change((s) => {
+      s.money = toggle(s.money, el.dataset.money);
+    });
+  if (el.matches("[data-count]"))
+    setCount(el.dataset.count, el.dataset.id, el.value);
+  if (el.matches("[data-setting]")) {
+    change((s) => {
+      s.settings[el.dataset.setting] = el.checked;
+    });
+    render();
+  }
+  if (el.matches("[data-character]")) {
+    change((s) => {
+      s.settings.hiddenCharacters = toggle(
+        s.settings.hiddenCharacters,
+        el.dataset.character,
+      );
+    });
+    render();
+  }
+  if (el.id === "preferred-method") {
+    change((s) => {
+      s.method = el.value;
+    }, true);
+  }
+  if (el.id === "cheat-category") {
+    updateQuery("c", el.value);
+    render();
+  }
+  if (el.id === "store-filter" || el.id === "store-region") {
+    updateQuery(el.id === "store-filter" ? "f" : "r", el.value);
+    render();
+  }
+  if (el.id === "money-jump") {
+    activeMoney = el.value;
+    change((s) => {
+      s.activeMoney = activeMoney;
+    }, true);
+    document
+      .querySelector(`[data-money-accordion="${activeMoney}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }
+  if (el.id === "price-character") showPrices(priceMission, el.value);
+  if (el.id === "import-file" && el.files[0]) {
+    try {
+      if (el.files[0].size > 300000)
+        throw Error("File too large. Choose a Glovebox JSON backup.");
+      previewImport(await el.files[0].text());
+    } catch (error) {
+      document.querySelector("#import-result").textContent = error.message;
+    }
+  }
+});
+function refreshCheckedCounts() {
+  const y = scrollY;
+  render();
+  scrollTo(0, y);
+}
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.id === "global-search") searchAll(el.value);
+  if (el.matches("[data-count]")) {
+    setCount(el.dataset.count, el.dataset.id, el.value, false);
+    const total = document.querySelector(".completion-number");
+    if (total)
+      total.innerHTML =
+        completionPercent(state.progress).toFixed(1) +
+        '<span class="meta">%</span>';
+    const bars = el.closest(".progress-row")?.querySelectorAll(".segbar span");
+    bars?.forEach((bar, i) =>
+      bar.classList.toggle("done", i < (state.progress[el.dataset.id] || 0)),
     );
   }
-  if (target.id === "store-filter" || target.id === "store-region") {
-    const leavingDetail = route.view === "store";
-    const oldY = window.scrollY;
-    storeListRoute.filter = $("#store-filter").value;
-    storeListRoute.region = $("#store-region").value;
-    history.replaceState(
-      null,
-      "",
-      routeURL("stores", {
-        q: storeListRoute.query,
-        f: storeListRoute.filter,
-        r: storeListRoute.region,
-      }),
+  if (el.id === "session-note") {
+    change((s) => {
+      s.note = el.value;
+    });
+    document.querySelector("#note-status").textContent = db.warning
+      ? "Kept in this tab · export a backup"
+      : "Saved locally";
+  }
+  if (el.matches("[data-price]")) {
+    change((s) => {
+      s.prices[priceMission] ??= {};
+      s.prices[priceMission][priceCharacter] ??= {};
+      s.prices[priceMission][priceCharacter][el.dataset.price] = el.value;
+    });
+    calculatePrices();
+  }
+  if (el.id === "cheat-search") {
+    updateQuery("q", el.value);
+    const parsed = new DOMParser().parseFromString(
+      renderView(route, { ...state, activeMoney }),
+      "text/html",
     );
-    route = { ...storeListRoute };
-    if (leavingDetail) {
-      render({ focus: false });
-      document.getElementById(target.id)?.focus({ preventScroll: true });
-      window.scrollTo({ top: oldY, behavior: "instant" });
-    } else $("#store-list").innerHTML = storeListContent();
-    announce(`${filteredStores().length} matching stores`);
+    document.querySelector("#cheat-rows").innerHTML =
+      parsed.querySelector("#cheat-rows").innerHTML;
+    document.querySelector(".cheat-browser .detail").innerHTML =
+      parsed.querySelector(".cheat-browser .detail").innerHTML;
+  }
+  if (el.id === "store-search") {
+    updateQuery("q", el.value);
+    document.querySelector("#store-rows").innerHTML = storeList(route, state);
+  }
+  if (el.id === "animal-search") {
+    updateQuery("q", el.value);
+    const parsed = new DOMParser().parseFromString(
+      renderView(route, state),
+      "text/html",
+    );
+    document.querySelector("#animal-rows").innerHTML =
+      parsed.querySelector("#animal-rows").innerHTML;
+  }
+  if (el.id === "mission-search") {
+    updateQuery("q", el.value);
+    document.querySelector("#mission-rows").innerHTML = missionRows(
+      el.value,
+      state,
+    );
   }
 });
 document.addEventListener(
-  "click",
-  (event) => {
-    const link = event.target.closest(".row-link, .store-row-link");
-    const key = listKey(route);
-    if (link && key)
-      listPositions.set(key, {
-        y: window.scrollY,
-        href: link.getAttribute("href"),
-      });
+  "toggle",
+  (e) => {
+    if (e.target.matches?.("[data-money-accordion]") && e.target.open) {
+      activeMoney = e.target.dataset.moneyAccordion;
+      if (state.activeMoney !== activeMoney)
+        change((s) => {
+          s.activeMoney = activeMoney;
+        }, false);
+      const picker = document.querySelector("#money-jump");
+      if (picker) picker.value = activeMoney;
+    }
   },
   true,
 );
-document.addEventListener("click", async (event) => {
-  const target = event.target.closest("button, a[data-action]");
-  if (!target) return;
-  if (target.dataset.favorite) {
-    const id = target.dataset.favorite,
-      present = state.favorites.includes(id);
-    const favoriteIndex = [
-      ...document.querySelectorAll("[data-favorite]"),
-    ].indexOf(target);
-    const oldY = window.scrollY;
-    state.favorites = present
-      ? state.favorites.filter((item) => item !== id)
-      : [...state.favorites, id];
-    persist();
-    if (route.view === "saved") {
-      render({ focus: false });
-      const remaining = [...document.querySelectorAll("[data-favorite]")];
-      (
-        remaining[Math.min(favoriteIndex, remaining.length - 1)] ||
-        $(".section-label a")
-      )?.focus({ preventScroll: true });
-      window.scrollTo({ top: oldY, behavior: "instant" });
-    } else
-      document.querySelectorAll(`[data-favorite="${id}"]`).forEach((button) => {
-        button.setAttribute("aria-pressed", String(!present));
-        button.innerHTML = `<span aria-hidden="true">${present ? "☆" : "★"}</span>`;
-      });
-    announce(
-      `${cheats.find((c) => c.id === id).title} ${present ? "removed from" : "added to"} saved cheats.`,
-    );
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const typing = e.target.matches("input,textarea,select,[contenteditable]");
+  if (typing) {
+    if (e.key === "Enter" && e.target.id === "cheat-search") {
+      document.querySelector("#cheat-rows a")?.click();
+    }
+    return;
   }
-  if (target.dataset.copy) {
-    const cheat = cheats.find((c) => c.id === target.dataset.copy);
-    const number = $("#phone-number");
-    try {
-      if (!navigator.clipboard?.writeText)
-        throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(cheat.phone);
-      toast("Number copied. Enter it on the in-game phone.");
-    } catch {
-      if (!number?.isConnected) {
-        toast(`Copy unavailable. In-game number: ${cheat.phone}`);
-        return;
-      }
-      const range = document.createRange();
-      range.selectNodeContents(number);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      number.focus();
+  if (e.key === "/" && !sheet.open && !big.open) {
+    e.preventDefault();
+    showSearch();
+    return;
+  }
+  if (sheet.open || big.open) return;
+  if (route.view === "store" && document.querySelector(".viewer")?.contains(e.target)) {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      go(
+        `#/store/${nextStore(route.id, state.stores, false, e.key === "ArrowLeft" ? -1 : 1)}`,
+        true,
+      );
+    }
+    if (e.key.toLowerCase() === "d") markStore(route.id);
+    if (["+", "=", "-", "0"].includes(e.key)) {
+      e.preventDefault();
+      setZoom(e.key === "0" ? 1 : zoom + (e.key === "-" ? -1 : 1));
+    }
+    if (e.key === "Escape") go("#/stores");
+  }
+});
+document.addEventListener("dblclick", (e) => {
+  if (e.target.id === "store-image") setZoom(zoom === 1 ? 2 : 1);
+});
+window.addEventListener("hashchange", onRoute);
+window.addEventListener("storage", (e) => {
+  if (e.key !== STORAGE_KEY) return;
+  if (db.receive(e.newValue)) {
+    state = db.state;
+    activeMoney = state.activeMoney;
+    render();
+    if (sheet.open)
       toast(
-        "Copy unavailable. Number selected—use your device’s Copy command.",
+        "Saved data updated in another tab. Reopen this panel to see the latest values.",
       );
-    }
   }
-  if (target.dataset.openMap) openMap(target.dataset.openMap);
-  if (target.dataset.retryMap) {
-    const holder = target.closest("[data-map]");
-    delete holder.dataset.mounted;
-    holder.classList.remove("failed");
-    holder.innerHTML = '<p class="map-status">Retrying image…</p>';
-    mountMaps(holder.parentElement);
-  }
-  if (target.dataset.zoom) {
-    document
-      .querySelectorAll("[data-zoom]")
-      .forEach((button) =>
-        button.setAttribute("aria-pressed", String(button === target)),
-      );
-    $("#map-viewport").className =
-      `map-viewport ${target.dataset.zoom === "fit" ? "" : "zoom-" + target.dataset.zoom}`;
-    $("#map-viewport").scrollTo(0, 0);
-  }
-  switch (target.dataset.action) {
-    case "close-map":
-      $("#map-dialog").close();
-      break;
-    case "overview":
-      event.preventDefault();
-      openMap("overview");
-      break;
-    case "clear-cheat-search":
-      location.hash = "#/cheats?c=all";
-      break;
-    case "clear-store-search":
-      location.hash = "#/stores";
-      break;
-    case "export-recovery":
-    case "export": {
-      const isRecovery = target.dataset.action === "export-recovery";
-      const content = isRecovery
-        ? storage.recovery
-        : JSON.stringify(state, null, 2);
-      $("#backup-text").value = content;
-      const blob = new Blob([content], { type: "application/json" });
-      const url = URL.createObjectURL(blob),
-        link = document.createElement("a");
-      link.href = url;
-      link.download = isRecovery
-        ? "glovebox-recovery.txt"
-        : "glovebox-backup.json";
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      $("#backup-status").textContent =
-        "Backup prepared for download. The same contents are in the box below if your browser cannot download it.";
-      break;
-    }
-    case "import": {
-      try {
-        const raw = $("#backup-text").value;
-        if (raw.length > 50000) throw new Error("Backup is too large.");
-        const clean = sanitizeState(
-          JSON.parse(raw),
-          cheats.map((c) => c.id),
-          stores.map((s) => s.id),
-        );
-        state.favorites = [
-          ...new Set([...state.favorites, ...clean.state.favorites]),
-        ];
-        state.stores = [...new Set([...state.stores, ...clean.state.stores])];
-        persist();
-        render({ focus: false });
-        $(".backup").open = true;
-        $("#backup-status").textContent =
-          `Backup merged. ${clean.dropped ? clean.dropped + " unknown or duplicate items skipped." : "All items recognized."}`;
-        $("#backup-status").tabIndex = -1;
-        $("#backup-status").focus();
-      } catch (error) {
-        $("#backup-status").textContent =
-          error instanceof SyntaxError
-            ? "That is not valid JSON. Paste the full contents of a Glovebox backup."
-            : error.message;
-      }
-      break;
-    }
-  }
+  showWarning();
 });
-document.addEventListener("keydown", (event) => {
-  if (
-    event.key === "/" &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName) &&
-    !$("#map-dialog").open
-  ) {
-    const input = $("#cheat-search") || $("#store-search");
-    if (input) {
-      event.preventDefault();
-      input.focus();
-    }
-  }
-});
-window.addEventListener("hashchange", () => {
-  const next = parseRoute(location.hash);
-  if (!next) return;
-  if ($("#map-dialog").open) $("#map-dialog").close();
-  const returning =
-    (route.view === "cheat" && ["cheats", "saved"].includes(next.view)) ||
-    (route.view === "store" && next.view === "stores");
-  route = next;
-  const position = returning ? listPositions.get(listKey(route)) : null;
-  render({ focus: !position });
-  if (position) {
-    [...document.querySelectorAll(".row-link, .store-row-link")]
-      .find((link) => link.getAttribute("href") === position.href)
-      ?.focus({ preventScroll: true });
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: position.y, behavior: "instant" }),
-    );
-  }
-});
-window.addEventListener("storage", (event) => {
-  if (event.key !== STORAGE_KEY && event.key !== null) return;
-  if (storage.receive(event.newValue)) {
-    state = storage.state;
-    const active = document.activeElement,
-      oldY = window.scrollY;
-    const draft = $("#backup-text")?.value,
-      backupOpen = $(".backup")?.open;
-    const selection = active?.selectionStart;
-    render({ focus: false });
-    if (draft !== undefined && $("#backup-text"))
-      $("#backup-text").value = draft;
-    if (backupOpen && $(".backup")) $(".backup").open = true;
-    const replacement = active?.isConnected
-      ? active
-      : active?.id
-        ? document.getElementById(active.id)
-        : active?.dataset.favorite
-          ? document.querySelector(
-              `[data-favorite="${active.dataset.favorite}"]`,
-            )
-          : null;
-    replacement?.focus({ preventScroll: true });
-    if (replacement?.setSelectionRange && typeof selection === "number")
-      replacement.setSelectionRange(selection, selection);
-    window.scrollTo({ top: oldY, behavior: "instant" });
-    announce("Saved selections updated from another tab.");
-  }
-  showStorageWarning();
-});
-render({ focus: false });
+render();

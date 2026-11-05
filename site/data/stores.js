@@ -45,7 +45,7 @@ export const stores = [
     id: "SR9",
     name: "24/7",
     area: "Strawberry",
-    street: "Use the screenshot pin",
+    street: "Innocence Boulevard / Elgin Avenue",
     region: "city",
     sequence: 4,
     image:
@@ -53,7 +53,7 @@ export const stores = [
     width: 858,
     height: 478,
     aliases: "Innocence Boulevard Elgin Avenue",
-    note: "Street labels conflict: GosuNoob and PowerPyx say Innocence Boulevard; Fiction Horizon says Elgin Avenue. Use the Strawberry screenshot pin.",
+    note: "Also listed as Elgin Avenue. The close-up shows the Strawberry shop pin.",
   },
   {
     id: "PR10",
@@ -115,7 +115,7 @@ export const stores = [
     id: "PR4",
     name: "LTD",
     area: "Northwest hills",
-    street: "Use the screenshot pin",
+    street: "Tongva Drive / Richman Glen",
     region: "west",
     sequence: 9,
     image:
@@ -123,7 +123,7 @@ export const stores = [
     width: 860,
     height: 477,
     aliases: "Richman Glen Tongva Drive Banham Canyon",
-    note: "This northwest-hills location is inconsistently named in source text (Tongva Drive / Banham Canyon versus Richman Glen). Follow the actual map pin rather than treating a street label as certain.",
+    note: "Also listed as Richman Glen. Use the highlighted shop on this close-up.",
   },
   {
     id: "PR3",
